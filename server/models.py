@@ -41,7 +41,8 @@ class JobResponse(BaseModel):
     job_id: str
     status: JobStatus
     progress: Optional[str] = None
-    video_url: Optional[str] = None
+    animation_url: Optional[str] = None   # Manim output
+    avatar_url: Optional[str] = None      # fal.ai talking-head output
     error: Optional[str] = None
 
 

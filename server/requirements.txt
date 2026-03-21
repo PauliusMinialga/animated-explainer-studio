@@ -9,8 +9,8 @@ openai
 anthropic
 fal-client
 
-# Video merge
-moviepy
+# Video merge — no longer needed server-side (composited in browser)
+# moviepy
 
 # Web framework
 fastapi
