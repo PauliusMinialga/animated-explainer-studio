@@ -5,6 +5,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
+const IS_DEV = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+const API_BASE = import.meta.env.VITE_API_URL || "https://vizifi.onrender.com";
+
 const avatars = [
   { id: "c3po", name: "C-3PO", image: "/c3po.jpg", position: "center" },
   { id: "super_man", name: "Super Man", image: "/super_man.jpg", position: "top" },
@@ -130,6 +133,56 @@ const Premium = () => {
     }, POLL_INTERVAL);
   }, [stopPolling, navigate]);
 
+  // Local dev polling: poll backend /jobs/:id directly
+  const startLocalPolling = useCallback((jobId: string) => {
+    pollStartRef.current = Date.now();
+
+    pollRef.current = setInterval(async () => {
+      if (Date.now() - pollStartRef.current > POLL_TIMEOUT) {
+        stopPolling();
+        setGenerating(false);
+        toast({ title: "Taking longer than expected", description: "Check the server logs." });
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        setCurrentStatus(data.status);
+
+        if (data.status === "done") {
+          stopPolling();
+          setGenerating(false);
+
+          if (data.job_type === "repo") {
+            toast({ title: "Analysis ready!", description: "Redirecting to interactive explainer…" });
+            navigate(`/repo/${jobId}`);
+            return;
+          }
+
+          if (data.final_url) {
+            setVideoUrl(data.final_url);
+            toast({ title: "Video ready!", description: "Your video has been generated." });
+          } else if (data.animation_url) {
+            setVideoUrl(data.animation_url);
+            toast({ title: "Video ready!", description: "Animation generated (no avatar)." });
+          } else {
+            toast({ title: "Done", description: "Processing complete." });
+          }
+        } else if (data.status === "failed") {
+          stopPolling();
+          setGenerating(false);
+          setErrorMessage(data.error || "An unknown error occurred.");
+          toast({ title: "Generation failed", description: data.error || "Something went wrong.", variant: "destructive" });
+        }
+      } catch {
+        // Network error — keep polling
+      }
+    }, POLL_INTERVAL);
+  }, [stopPolling, navigate]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => { stopPolling(); };
@@ -152,29 +205,47 @@ const Premium = () => {
     }, 5000);
 
     try {
-      const { data, error } = await supabase.functions.invoke("generate-video", {
-        body: {
-          topic: isPromptMode ? prompt.trim() : url.trim(),
-          mode: isPromptMode ? "prompt" : "repo",
-          avatar: selectedAvatar,
-          mood: mood.toLowerCase(),
-          level: level.toLowerCase(),
-          github_url: url.trim() || null,
-        },
-      });
+      let jobId: string;
 
-      if (error) {
-        throw new Error(error.message || "Failed to invoke edge function");
+      if (IS_DEV) {
+        // Local dev: call backend directly, poll via /jobs/:id
+        const isRepo = !isPromptMode && url.trim().startsWith("https://github.com/");
+        const res = await fetch(`${API_BASE}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: isPromptMode ? prompt.trim() : url.trim(),
+            mood: mood.toLowerCase(),
+            level: level.toLowerCase(),
+            mode: "concept",
+          }),
+        });
+        if (!res.ok) throw new Error(`Backend error: ${res.status}`);
+        const result = await res.json();
+        jobId = result.job_id;
+        setRequestId(jobId);
+        setCurrentStatus("pending");
+        startLocalPolling(jobId);
+      } else {
+        // Production: call Supabase edge function, poll via Supabase
+        const { data, error } = await supabase.functions.invoke("generate-video", {
+          body: {
+            topic: isPromptMode ? prompt.trim() : url.trim(),
+            mode: isPromptMode ? "prompt" : "repo",
+            avatar: selectedAvatar,
+            mood: mood.toLowerCase(),
+            level: level.toLowerCase(),
+            github_url: url.trim() || null,
+          },
+        });
+        if (error) throw new Error(error.message || "Failed to invoke edge function");
+        const reqId = data?.request_id;
+        if (!reqId) throw new Error("No request_id returned");
+        setRequestId(reqId);
+        setCurrentStatus("pending");
+        startPolling(reqId);
       }
 
-      const reqId = data?.request_id;
-      if (!reqId) {
-        throw new Error("No request_id returned");
-      }
-
-      setRequestId(reqId);
-      setCurrentStatus("pending");
-      startPolling(reqId);
       toast({ title: "Request submitted!", description: "Your video is being generated." });
     } catch (err: any) {
       setGenerating(false);
@@ -195,7 +266,7 @@ const Premium = () => {
     setErrorMessage(null);
   };
 
-  if (loading || profileLoading) {
+  if (!IS_DEV && (loading || profileLoading)) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -203,8 +274,8 @@ const Premium = () => {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
-  if (!isPremium) return <Navigate to="/concepts" replace />;
+  if (!IS_DEV && !user) return <Navigate to="/login" replace />;
+  if (!IS_DEV && !isPremium) return <Navigate to="/concepts" replace />;
 
   // ── PREMIUM USER LAYOUT ──
   return (
