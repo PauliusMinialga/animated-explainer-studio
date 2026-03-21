@@ -27,6 +27,15 @@ _GH_HEADERS = {
 }
 
 
+def _gh_headers() -> dict:
+    """Return GitHub API headers, including auth token if available."""
+    from config import settings
+    headers = dict(_GH_HEADERS)
+    if settings.github_token:
+        headers["Authorization"] = f"Bearer {settings.github_token}"
+    return headers
+
+
 async def ingest_github_repo(url: str) -> str:
     """
     Build a structured repo summary via the GitHub API (no key needed for public repos).
@@ -67,7 +76,7 @@ async def _fetch_tree_summary(client: httpx.AsyncClient, owner: str, repo: str) 
             r = await client.get(
                 f"https://api.github.com/repos/{owner}/{repo}/git/trees/{ref}",
                 params={"recursive": "1"},
-                headers=_GH_HEADERS,
+                headers=_gh_headers(),
             )
             if r.status_code == 200:
                 break
@@ -102,7 +111,7 @@ async def _fetch_readme(client: httpx.AsyncClient, owner: str, repo: str) -> str
     try:
         r = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/readme",
-            headers=_GH_HEADERS,
+            headers=_gh_headers(),
         )
         if r.status_code == 200:
             content = r.json().get("content", "")
@@ -116,7 +125,7 @@ async def _fetch_key_files(client: httpx.AsyncClient, owner: str, repo: str) -> 
     try:
         r = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/contents",
-            headers=_GH_HEADERS,
+            headers=_gh_headers(),
         )
         if r.status_code != 200 or not isinstance(r.json(), list):
             return ""
