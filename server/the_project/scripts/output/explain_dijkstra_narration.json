@@ -1,0 +1,84 @@
+{
+  "scene": "explain_dijkstra",
+  "total_duration": 49.0,
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 4.0,
+      "duration": 4.0,
+      "text": "Dijkstra's algorithm finds the shortest path between nodes in a graph. Let's see the code and watch it run."
+    },
+    {
+      "start": 4.0,
+      "end": 8.0,
+      "duration": 4.0,
+      "text": "Here's a graph with six nodes connected by weighted edges. The numbers on each edge represent the cost to travel that connection."
+    },
+    {
+      "start": 8.0,
+      "end": 10.0,
+      "duration": 2.0,
+      "text": "We start at node A with a distance of zero. All other distances start at infinity."
+    },
+    {
+      "start": 10.0,
+      "end": 14.0,
+      "duration": 4.0,
+      "text": "We visit node A first. Checking its neighbors \u2014 node B is four away, and node D is only two away."
+    },
+    {
+      "start": 14.0,
+      "end": 18.0,
+      "duration": 4.0,
+      "text": "We update the distances for B and D and mark those edges as part of potential shortest paths."
+    },
+    {
+      "start": 18.0,
+      "end": 23.0,
+      "duration": 5.0,
+      "text": "Node D has the smallest distance, so we visit it next. From D, we can reach E with a total distance of seven."
+    },
+    {
+      "start": 23.0,
+      "end": 27.0,
+      "duration": 4.0,
+      "text": "Now we visit node B. From B, we can reach C with a distance of seven, and E with a distance of five."
+    },
+    {
+      "start": 27.0,
+      "end": 31.0,
+      "duration": 4.0,
+      "text": "Five is better than the seven we had for E, so we update it."
+    },
+    {
+      "start": 31.0,
+      "end": 35.0,
+      "duration": 4.0,
+      "text": "Node E is next. From E, we can reach C with a distance of seven \u2014 same as before \u2014 and F with a distance of nine."
+    },
+    {
+      "start": 35.0,
+      "end": 39.0,
+      "duration": 4.0,
+      "text": "We update F's distance and continue."
+    },
+    {
+      "start": 39.0,
+      "end": 44.0,
+      "duration": 5.0,
+      "text": "From node C, we can reach F with a distance of eight, which is better than nine. We update F."
+    },
+    {
+      "start": 44.0,
+      "end": 46.0,
+      "duration": 2.0,
+      "text": "Node F has no unvisited neighbors, so we're done."
+    },
+    {
+      "start": 46.0,
+      "end": 49.0,
+      "duration": 3.0,
+      "text": "All shortest paths from A have been found. This is the power of Dijkstra's algorithm \u2014 it guarantees the optimal path to every node."
+    }
+  ]
+}

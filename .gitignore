@@ -1,3 +1,8 @@
+# Dependencies
+node_modules
+dist
+dist-ssr
+
 # Logs
 logs
 *.log
@@ -7,18 +12,35 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# OS
+.DS_Store
+
+# Env / secrets
+.env
+*.local
+
+# Python
+__pycache__/
+*.pyc
+.python-version
+
+# Virtual env
+server/the_project/manim-env/
+
+# Manim renders
+media/
+animations/
+
+# Claude
+.claude_history
+.claude/
