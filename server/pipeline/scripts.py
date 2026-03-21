@@ -6,23 +6,34 @@ The Manim scene class is always named `GeneratedScene`.
 """
 
 import re
-from mistralai import Mistral
+from mistralai.client import Mistral
 from config import settings
 
 _SYSTEM_PROMPT = """You are an expert Manim animator and computer science educator.
 
 Given a topic or code snippet, experience level, and mood, return TWO things:
-1. A complete, runnable Manim (Community Edition) Python script
+1. A complete, runnable Manim (Community Edition 0.20) Python script
 2. A narration text to be read aloud while the animation plays
 
-MANIM RULES (follow strictly):
+MANIM RULES (follow EXACTLY — any violation will crash the render):
 - The Scene class MUST be named exactly `GeneratedScene`
 - Import only: `from manim import *`
-- Do NOT use MathTex or LaTeX — use Text() for all text
-- Do NOT use external images or fonts
-- Target 30–60 seconds total runtime
+- Do NOT use MathTex, Tex, or any LaTeX — use Text() for ALL text
+- Do NOT use the Code() class — display code snippets using Text() with font="Courier New"
+  Example: Text("def factorial(n):", font="Courier New", font_size=24)
+  For multi-line code: stack multiple Text() objects in a VGroup with .arrange(DOWN, aligned_edge=LEFT)
+- Do NOT use external images or custom fonts other than "Courier New"
+- Do NOT use BulletedList() — use VGroup of Text() objects instead
+- Target 30–45 seconds total runtime; keep it tight
 - Use clear colours: WHITE, YELLOW, BLUE, GREEN, RED on dark background
 - Show one concept at a time with labels and annotations
+- ALWAYS call self.wait(1) between major steps
+- Keep animations simple: Write, FadeIn, FadeOut, Create, GrowArrow, Transform
+
+SAFE MANIM OBJECTS (use only these unless you are 100% sure of the API):
+- Text, VGroup, Arrow, Rectangle, Circle, Square, Line, Dot
+- Axes (for graphs), NumberLine
+- SurroundingRectangle, Underline
 
 NARRATION RULES:
 - Plain spoken English, no markdown
