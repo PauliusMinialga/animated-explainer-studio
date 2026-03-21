@@ -41,17 +41,26 @@ def _set(job_id: str, **kwargs):
 
 @router.post("/generate", response_model=JobResponse, status_code=202)
 async def generate(req: GenerateRequest, background_tasks: BackgroundTasks):
-    job_id = str(uuid.uuid4())
-    _jobs[job_id] = {
-        "status": JobStatus.pending,
-        "progress": "Queued",
-        "animation_url": None,
-        "final_url": None,
-        "tts_script": None,
-        "error": None,
-    }
-    background_tasks.add_task(_run_pipeline, job_id, req)
-    return JobResponse(job_id=job_id, status=JobStatus.pending, progress="Queued")
+    # Added prints for debugging as requested
+    print(f"\n🚀 [generate] RECEIVED REQUEST: {req.model_dump_json(indent=2) if hasattr(req, 'model_dump_json') else req}")
+    logger.info("[%s] Incoming generate request: %s", "NEW", req)
+    
+    try:
+        job_id = str(uuid.uuid4())
+        _jobs[job_id] = {
+            "status": JobStatus.pending,
+            "progress": "Queued",
+            "animation_url": None,
+            "final_url": None,
+            "tts_script": None,
+            "error": None,
+        }
+        background_tasks.add_task(_run_pipeline, job_id, req)
+        return JobResponse(job_id=job_id, status=JobStatus.pending, progress="Queued")
+    except Exception as e:
+        print(f"❌ [generate] FAILED to initialize job: {e}")
+        logger.exception("Generate route error")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
@@ -167,9 +176,12 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
         _set(job_id, status=JobStatus.done, progress="Done")
 
     except HTTPException as exc:
+        print(f"❌ [pipeline] HTTPException in job {job_id}: {exc.detail}")
         _set(job_id, status=JobStatus.failed, progress="Failed", error=exc.detail)
         raise
     except Exception as exc:
+        print(f"❌ [pipeline] UNEXPECTED ERROR in job {job_id}: {exc}")
+        logger.exception("[%s] Pipeline failed", job_id)
         _set(job_id, status=JobStatus.failed, progress="Failed", error=str(exc))
         raise
 
