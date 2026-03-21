@@ -90,7 +90,12 @@ const Premium = () => {
     timerRef.current.push(finalTimer);
   };
 
-  // ── Premium user: real request ──
+  const handleBrowserSelect = (item: AlgorithmItem) => {
+    setSelectedPremade(item.id);
+    setSelectedPremadeFile(item.file);
+  };
+
+
   const handlePremiumGenerate = async () => {
     if (!prompt.trim() || generating) return;
 
