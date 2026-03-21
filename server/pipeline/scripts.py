@@ -121,34 +121,54 @@ def _parse(content: str) -> dict:
 
 
 _REPO_PROMPT_TEMPLATE = """\
-You are generating content for a short animated educational video explaining \
-a GitHub repository to a {level} developer.
+You are generating a Manim animation script for a short educational video about a GitHub repository.
+The viewer is a {level} developer. Tone: {mood}.
 
-Here is the full repository content:
+Here is the repository content:
 {repo_content}
 
-Return EXACTLY this format, no extra text:
+─── ANIMATION STYLE: MIND MAP ───────────────────────────────────────────────
+Create a mind map animation. Layout rules:
+1. One central node (repo name) placed at ORIGIN using .move_to(ORIGIN)
+2. 4–6 component nodes placed RADIALLY around the center using explicit coordinates:
+   - Use .move_to(direction * distance) where direction is UP, DOWN, LEFT, RIGHT,
+     UR, UL, DR, DL and distance is 2.5–3.5
+   - Each node is a Rectangle with a Text label inside, grouped as VGroup(rect, label)
+3. Arrows from center to each component node (CurvedArrow or Arrow)
+4. For key interactions between components, add arrows BETWEEN component nodes too
+5. Animate in this order:
+   a. FadeIn the central node
+   b. Create each component node one by one with a short self.wait(0.3) between each
+   c. GrowArrow each connection from center outward
+   d. GrowArrow the inter-component connections, highlighting the main data flow
+   e. End with self.wait(2)
+
+─── STRICT MANIM RULES (violations will crash the render) ────────────────────
+- Scene class MUST be named exactly `GeneratedScene`
+- Import only: `from manim import *`
+- Do NOT use MathTex, Tex, Code(), BulletedList(), or any LaTeX
+- Use Text() for all labels (font_size 20–28)
+- Rectangle nodes: width=2.2, height=0.9, use color=BLUE or WHITE etc.
+- NEVER use .arrange() for the mind map nodes — position each one with .move_to()
+- SurroundingRectangle only accepts a single Mobject — wrap slices with VGroup(*...)
+- Target 25–35 seconds total runtime
+- Allowed objects: Text, VGroup, Arrow, CurvedArrow, Rectangle, Circle, Line,
+  Dot, FadeIn, FadeOut, Create, Write, GrowArrow
+
+─── OUTPUT FORMAT (return EXACTLY this, no extra text) ───────────────────────
 
 --- MANIM_SCRIPT ---
-[A self-contained Python Manim script using Scene class named GeneratedScene.
- Visually maps the repo: main folders as labeled rectangles,
- key files as smaller nodes, arrows showing dependencies/call flow
- between components. Animate the connections sequentially.
- Under 30 seconds. Use only: from manim import *
- Do NOT use MathTex, Tex, Code(), BulletedList(), or LaTeX.
- Use Text() for all labels. Use only: Text, VGroup, Arrow, Rectangle, Square,
- Circle, Line, Dot, FadeIn, FadeOut, Create, Write, GrowArrow.
- SurroundingRectangle only accepts a single Mobject — wrap slices with VGroup(*...).]
+[the complete Python script]
 
 --- TTS_INTRO ---
 [1 sentence: what this repo does]
 
 --- TTS_INFO ---
-[3-4 sentences, tone: {mood}: main components, what each does,
- how they interact — follow the actual call/data flow in the code]
+[3-4 sentences, {mood} tone: main components, what each does,
+ how they connect — follow the actual data/call flow in the code]
 
 --- TTS_OUTRO ---
-[1 sentence: key takeaway or architecture pattern used]
+[1 sentence: key architectural pattern or takeaway]
 """
 
 _REPO_SECTION_RE = re.compile(
