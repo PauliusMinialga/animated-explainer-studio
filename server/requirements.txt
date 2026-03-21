@@ -1,4 +1,5 @@
 manim
+moderngl
 pycairo
 numpy
 openai
