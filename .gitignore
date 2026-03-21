@@ -33,6 +33,7 @@ lerna-debug.log*
 __pycache__/
 *.pyc
 .python-version
+env
 
 # Virtual env
 server/the_project/manim-env/
