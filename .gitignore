@@ -3,6 +3,10 @@ node_modules
 dist
 dist-ssr
 
+# Lockfiles — npm only, ignore bun
+bun.lock
+bun.lockb
+
 # Logs
 logs
 *.log
