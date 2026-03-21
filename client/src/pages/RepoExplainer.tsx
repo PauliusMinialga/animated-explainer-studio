@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Loader2, ArrowLeft } from "lucide-react";
-import RepoExplainerFlow from "@/components/repo-explainer/RepoExplainerFlow";
+import RepoPlayer from "@/components/repo-explainer/RepoPlayer";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -96,24 +96,15 @@ export default function RepoExplainer() {
     );
   }
 
-  // Repo job done — render React Flow
-  if (job?.architecture && job?.storyboard) {
+  // Repo job done — render player
+  if (job?.architecture && job?.storyboard && job?.narration) {
     return (
-      <div className="h-[calc(100vh-80px)] p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <Link to="/" className="text-xs text-white/40 hover:text-white/60 flex items-center gap-1">
-            <ArrowLeft className="h-3 w-3" /> Back
-          </Link>
-          <p className="text-xs text-white/30">
-            {job.architecture.summary}
-          </p>
-        </div>
-        <div className="h-[calc(100%-40px)]">
-          <RepoExplainerFlow
-            architecture={job.architecture}
-            storyboard={job.storyboard}
-          />
-        </div>
+      <div className="h-[calc(100vh-80px)]">
+        <RepoPlayer
+          architecture={job.architecture}
+          storyboard={job.storyboard}
+          narration={job.narration}
+        />
       </div>
     );
   }

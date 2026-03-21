@@ -25,7 +25,7 @@ from models import GenerateRequest, JobResponse, JobStatus, JobType, TTSScriptRe
 from pipeline.enrich import enrich_prompt, ingest_github_repo
 from pipeline.scripts import generate_scripts
 from pipeline.manim_render import render_manim
-from pipeline.veed_pipeline import run_veed_pipeline
+from pipeline.veed_pipeline import run_veed_pipeline, generate_tts_audio
 from pipeline.final_merge import merge_final
 from pipeline.repo_analysis import analyze_repo
 from pipeline.repo_storyboard import generate_storyboard
@@ -142,10 +142,31 @@ async def _run_repo_pipeline(
     _set(job_id, progress="Assembling narration…")
     narration = assemble_narration(storyboard, architecture.summary)
     narr_dict = narration.model_dump()
+
+    # ── Per-scene TTS audio ───────────────────────────────────────────────────
+    if settings.runware_api_key:
+        _set(job_id, progress="Generating scene audio…")
+        logger.info("[%s] Generating per-scene TTS (%d scenes)", job_id, len(narration.scenes))
+
+        # Generate all scene audio files in parallel
+        scene_tts_tasks = []
+        for i, sn in enumerate(narration.scenes):
+            if sn.narration.strip():
+                out_path = out_dir / f"scene_{i}.mp3"
+                scene_tts_tasks.append((i, generate_tts_audio(sn.narration, out_path)))
+
+        for i, task in scene_tts_tasks:
+            try:
+                await task
+                narr_dict["scenes"][i]["audio_url"] = f"{base_url}/files/{job_id}/scene_{i}.mp3"
+                logger.info("[%s] Scene %d TTS done", job_id, i)
+            except Exception as exc:
+                logger.warning("[%s] Scene %d TTS failed: %s", job_id, i, exc)
+
     (out_dir / "narration.json").write_text(json.dumps(narr_dict, indent=2))
     _set(job_id, narration=narr_dict)
 
-    # Build TTS script for VEED
+    # Build TTS script for VEED avatars (intro/outro)
     tts_info = narration_to_tts_info(narration)
     tts_response = TTSScriptResponse(
         intro=narration.intro,
@@ -159,9 +180,9 @@ async def _run_repo_pipeline(
         job_id, narration.intro, tts_info[:200], narration.outro,
     )
 
-    # Optional: VEED avatar pipeline (intro/outro talking head)
+    # ── Avatar videos (intro + outro talking head) ────────────────────────────
     if settings.runware_api_key and settings.fal_key:
-        _set(job_id, progress="Generating avatar & voice…")
+        _set(job_id, progress="Generating avatar videos…")
         try:
             veed = await run_veed_pipeline(
                 intro_text=narration.intro,
@@ -169,14 +190,12 @@ async def _run_repo_pipeline(
                 outro_text=narration.outro,
                 job_dir=out_dir,
             )
-            # Store avatar URLs for frontend to use alongside React Flow
-            _set(
-                job_id,
-                animation_url=f"{base_url}/files/{job_id}/intro.mp4",
-                final_url=f"{base_url}/files/{job_id}/outro.mp4",
-            )
+            # Inject video URLs into narration dict
+            narr_dict["intro_video_url"] = f"{base_url}/files/{job_id}/intro.mp4"
+            narr_dict["outro_video_url"] = f"{base_url}/files/{job_id}/outro.mp4"
+            _set(job_id, narration=narr_dict)
         except Exception as exc:
-            logger.warning("[%s] VEED pipeline failed (non-fatal): %s", job_id, exc)
+            logger.warning("[%s] VEED avatar pipeline failed (non-fatal): %s", job_id, exc)
 
     _set(job_id, status=JobStatus.done, progress="Done")
 

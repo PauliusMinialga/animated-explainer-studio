@@ -1,0 +1,269 @@
+/**
+ * Full narrated playback controller for repo explanations.
+ *
+ * Playback sequence:
+ *   1. Avatar intro video
+ *   2. Scene-by-scene: React Flow visualization + TTS audio per scene
+ *   3. Avatar outro video
+ *
+ * Auto-advances when each audio/video finishes.
+ * Falls back to timer-based advancement if no audio available.
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+import RepoExplainerFlow from "./RepoExplainerFlow";
+
+type PlaybackPhase =
+  | { kind: "intro" }
+  | { kind: "scene"; index: number }
+  | { kind: "outro" }
+  | { kind: "done" };
+
+interface Narration {
+  intro: string;
+  intro_video_url?: string;
+  scenes: { scene_id: string; narration: string; audio_url?: string }[];
+  outro: string;
+  outro_video_url?: string;
+}
+
+interface RepoPlayerProps {
+  architecture: any;
+  storyboard: any;
+  narration: Narration;
+}
+
+const FALLBACK_SCENE_DURATION = 6000;
+
+export default function RepoPlayer({ architecture, storyboard, narration }: RepoPlayerProps) {
+  const [phase, setPhase] = useState<PlaybackPhase>({ kind: "intro" });
+  const [autoPlay, setAutoPlay] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const totalScenes = storyboard.scenes.length;
+  const hasIntroVideo = !!narration.intro_video_url;
+  const hasOutroVideo = !!narration.outro_video_url;
+
+  // Determine starting phase
+  useEffect(() => {
+    if (!hasIntroVideo) {
+      setPhase({ kind: "scene", index: 0 });
+    }
+  }, [hasIntroVideo]);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const advanceToNext = useCallback(() => {
+    if (!autoPlay) return;
+    clearTimer();
+
+    setPhase((prev) => {
+      if (prev.kind === "intro") {
+        return { kind: "scene", index: 0 };
+      }
+      if (prev.kind === "scene") {
+        const next = prev.index + 1;
+        if (next < totalScenes) {
+          return { kind: "scene", index: next };
+        }
+        return hasOutroVideo ? { kind: "outro" } : { kind: "done" };
+      }
+      if (prev.kind === "outro") {
+        return { kind: "done" };
+      }
+      return prev;
+    });
+  }, [autoPlay, totalScenes, hasOutroVideo, clearTimer]);
+
+  // Handle scene audio playback
+  useEffect(() => {
+    if (phase.kind !== "scene" || !autoPlay) return;
+
+    const sceneNarr = narration.scenes[phase.index];
+    const audioUrl = sceneNarr?.audio_url;
+
+    if (audioUrl && audioRef.current) {
+      audioRef.current.src = audioUrl;
+      audioRef.current.play().catch(() => {
+        // Audio play failed (user hasn't interacted) — fall back to timer
+        timerRef.current = setTimeout(advanceToNext, FALLBACK_SCENE_DURATION);
+      });
+    } else {
+      // No audio for this scene — use timer
+      timerRef.current = setTimeout(advanceToNext, FALLBACK_SCENE_DURATION);
+    }
+
+    return clearTimer;
+  }, [phase, autoPlay, narration.scenes, advanceToNext, clearTimer]);
+
+  // Manual scene control (when not autoplaying)
+  const goToScene = useCallback((index: number) => {
+    clearTimer();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setPhase({ kind: "scene", index });
+  }, [clearTimer]);
+
+  const handlePrev = useCallback(() => {
+    if (phase.kind === "scene" && phase.index > 0) {
+      goToScene(phase.index - 1);
+    }
+  }, [phase, goToScene]);
+
+  const handleNext = useCallback(() => {
+    if (phase.kind === "scene" && phase.index < totalScenes - 1) {
+      goToScene(phase.index + 1);
+    } else {
+      advanceToNext();
+    }
+  }, [phase, totalScenes, goToScene, advanceToNext]);
+
+  const toggleAutoPlay = useCallback(() => {
+    setAutoPlay((prev) => {
+      if (prev) {
+        // Pausing
+        clearTimer();
+        if (audioRef.current) audioRef.current.pause();
+      }
+      return !prev;
+    });
+  }, [clearTimer]);
+
+  // Restart
+  const handleRestart = useCallback(() => {
+    clearTimer();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setAutoPlay(true);
+    setPhase(hasIntroVideo ? { kind: "intro" } : { kind: "scene", index: 0 });
+  }, [hasIntroVideo, clearTimer]);
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
+  // Hidden audio element for scene narration
+  const audioElement = (
+    <audio
+      ref={audioRef}
+      onEnded={advanceToNext}
+      style={{ display: "none" }}
+    />
+  );
+
+  // Intro video
+  if (phase.kind === "intro" && hasIntroVideo) {
+    return (
+      <div className="flex h-full items-center justify-center bg-black">
+        {audioElement}
+        <video
+          ref={videoRef}
+          src={narration.intro_video_url}
+          autoPlay
+          playsInline
+          onEnded={advanceToNext}
+          className="max-h-full max-w-full"
+        />
+      </div>
+    );
+  }
+
+  // Outro video
+  if (phase.kind === "outro" && hasOutroVideo) {
+    return (
+      <div className="flex h-full items-center justify-center bg-black">
+        {audioElement}
+        <video
+          ref={videoRef}
+          src={narration.outro_video_url}
+          autoPlay
+          playsInline
+          onEnded={() => setPhase({ kind: "done" })}
+          className="max-h-full max-w-full"
+        />
+      </div>
+    );
+  }
+
+  // Done state
+  if (phase.kind === "done") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-gray-950">
+        {audioElement}
+        <p className="text-lg font-semibold text-white/70">Explanation complete</p>
+        <button
+          onClick={handleRestart}
+          className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+        >
+          ↺ Watch again
+        </button>
+      </div>
+    );
+  }
+
+  // Scene playback — React Flow with controls
+  const sceneIndex = phase.kind === "scene" ? phase.index : 0;
+  const currentScene = storyboard.scenes[sceneIndex];
+
+  return (
+    <div className="flex h-full flex-col">
+      {audioElement}
+
+      {/* Narration text overlay at top */}
+      <div className="shrink-0 border-b border-white/10 bg-black/40 px-6 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="rounded bg-blue-600/30 px-2 py-0.5 text-[10px] font-semibold text-blue-300 uppercase tracking-wider">
+              Scene {sceneIndex + 1} / {totalScenes}
+            </span>
+            <span className="text-sm font-medium text-white">{currentScene?.title}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrev}
+              disabled={sceneIndex === 0}
+              className="rounded px-2 py-1 text-xs text-white/60 hover:bg-white/10 disabled:opacity-30 transition-colors"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={toggleAutoPlay}
+              className="rounded px-2 py-1 text-xs text-white/60 hover:bg-white/10 transition-colors"
+            >
+              {autoPlay ? "⏸ Pause" : "▶ Play"}
+            </button>
+            <button
+              onClick={handleNext}
+              disabled={sceneIndex === totalScenes - 1 && !hasOutroVideo}
+              className="rounded px-2 py-1 text-xs text-white/60 hover:bg-white/10 disabled:opacity-30 transition-colors"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+        {currentScene?.narration && (
+          <p className="mt-2 text-xs leading-relaxed text-white/50 max-w-3xl">
+            {currentScene.narration}
+          </p>
+        )}
+      </div>
+
+      {/* React Flow canvas */}
+      <div className="flex-1">
+        <RepoExplainerFlow
+          architecture={architecture}
+          storyboard={storyboard}
+          activeSceneIndex={sceneIndex}
+        />
+      </div>
+    </div>
+  );
+}

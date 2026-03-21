@@ -55,6 +55,13 @@ async def _tts(text: str, out_path: Path) -> Path:
     return out_path
 
 
+async def generate_tts_audio(text: str, out_path: Path) -> Path:
+    """Public wrapper for TTS generation — used by repo pipeline for per-scene audio."""
+    if not settings.runware_api_key:
+        raise RuntimeError("RUNWARE_API_KEY is not set")
+    return await _tts(text, out_path)
+
+
 async def _avatar_video(audio_path: Path, out_path: Path) -> Path:
     """fal.ai VEED Fabric 1.0: audio + avatar image → mp4 URL → downloaded file."""
     os.environ["FAL_KEY"] = settings.fal_key

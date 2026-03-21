@@ -73,6 +73,8 @@ interface Storyboard {
 interface RepoExplainerFlowProps {
   architecture: Architecture;
   storyboard: Storyboard;
+  /** When provided, scene is controlled externally (by RepoPlayer). */
+  activeSceneIndex?: number;
 }
 
 // ── Dagre layout ────────────────────────────────────────────────────────────
@@ -130,12 +132,14 @@ const SCENE_DURATION_MS = 6000;
 
 // ── Inner component (needs ReactFlowProvider wrapper) ───────────────────────
 
-function FlowInner({ architecture, storyboard }: RepoExplainerFlowProps) {
-  const [currentScene, setCurrentScene] = useState(0);
+function FlowInner({ architecture, storyboard, activeSceneIndex }: RepoExplainerFlowProps) {
+  const controlled = activeSceneIndex !== undefined;
+  const [internalScene, setInternalScene] = useState(0);
   const [playing, setPlaying] = useState(false);
   const { fitView, setCenter } = useReactFlow();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const currentScene = controlled ? activeSceneIndex : internalScene;
   const scene: Scene | undefined = storyboard.scenes[currentScene];
 
   // Compute dagre positions once
@@ -238,27 +242,27 @@ function FlowInner({ architecture, storyboard }: RepoExplainerFlowProps) {
     return () => clearTimeout(timeout);
   }, [currentScene, scene, fitView, setCenter, positions]);
 
-  // Auto-play timer
+  // Auto-play timer (only when self-managed)
   useEffect(() => {
-    if (playing) {
-      timerRef.current = setInterval(() => {
-        setCurrentScene((prev) => {
-          if (prev >= storyboard.scenes.length - 1) {
-            setPlaying(false);
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, SCENE_DURATION_MS);
-    }
+    if (controlled || !playing) return;
+    timerRef.current = setInterval(() => {
+      setInternalScene((prev) => {
+        if (prev >= storyboard.scenes.length - 1) {
+          setPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, SCENE_DURATION_MS);
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [playing, storyboard.scenes.length]);
+  }, [controlled, playing, storyboard.scenes.length]);
 
-  const handlePrev = useCallback(() => setCurrentScene((p) => Math.max(0, p - 1)), []);
+  const handlePrev = useCallback(() => setInternalScene((p) => Math.max(0, p - 1)), []);
   const handleNext = useCallback(
-    () => setCurrentScene((p) => Math.min(storyboard.scenes.length - 1, p + 1)),
+    () => setInternalScene((p) => Math.min(storyboard.scenes.length - 1, p + 1)),
     [storyboard.scenes.length],
   );
   const handleTogglePlay = useCallback(() => setPlaying((p) => !p), []);
@@ -297,29 +301,33 @@ function FlowInner({ architecture, storyboard }: RepoExplainerFlowProps) {
           <Background color="#ffffff10" gap={20} />
         </ReactFlow>
 
-        {/* Scene controls overlay at bottom */}
-        <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
-          <SceneControls
-            currentScene={currentScene}
-            totalScenes={storyboard.scenes.length}
-            sceneTitle={scene.title}
-            onPrev={handlePrev}
-            onNext={handleNext}
-            playing={playing}
-            onTogglePlay={handleTogglePlay}
-          />
-        </div>
+        {/* Scene controls overlay at bottom (only when self-managed) */}
+        {!controlled && (
+          <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+            <SceneControls
+              currentScene={currentScene}
+              totalScenes={storyboard.scenes.length}
+              sceneTitle={scene.title}
+              onPrev={handlePrev}
+              onNext={handleNext}
+              playing={playing}
+              onTogglePlay={handleTogglePlay}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Side info panel */}
-      <div className="w-72 shrink-0">
-        <InfoPanel
-          sceneTitle={scene.title}
-          goal={scene.goal}
-          narration={scene.narration}
-          panel={scene.panel}
-        />
-      </div>
+      {/* Side info panel (only when self-managed) */}
+      {!controlled && (
+        <div className="w-72 shrink-0">
+          <InfoPanel
+            sceneTitle={scene.title}
+            goal={scene.goal}
+            narration={scene.narration}
+            panel={scene.panel}
+          />
+        </div>
+      )}
     </div>
   );
 }
