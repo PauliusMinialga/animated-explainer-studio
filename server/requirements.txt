@@ -1,7 +1,29 @@
+# Animation
 manim
 moderngl
 pycairo
 numpy
+
+# API clients
 openai
+anthropic
 fal-client
+
+# Video merge
 moviepy
+
+# Web framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Config
+pydantic-settings
+python-dotenv
+
+# Database
+supabase
+
+# Enrichment
+httpx
+beautifulsoup4
