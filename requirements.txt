@@ -1,30 +1,29 @@
-# ── Animation (Timothee) ──────────────────────────────────────────────────────
-# System deps: brew install cairo pango pkg-config
+# ── Animation — code snippet path (Timothee) ─────────────────────────────────
+# System deps: brew install cairo pango pkg-config ffmpeg
 # LaTeX optional (for MathTex): brew install --cask mactex-no-gui
 manim
 moderngl
 pycairo
 numpy
 
-# ── LLM — script generation (Timothee) ───────────────────────────────────────
+# ── LLM — script + architecture generation (Timothee) ────────────────────────
 mistralai                  # Mistral Small — free tier at console.mistral.ai
-openai                     # Gemini Flash 2.0 via OpenAI-compatible endpoint
 
 # ── TTS + Avatar — Bote's pipeline ───────────────────────────────────────────
 # System dep: brew install ffmpeg
 fal-client                 # fal.ai — VEED Fabric 1.0 avatar video generation
 runware                    # Runware TTS — text to speech audio
 websockets                 # required by runware SDK
-elevenlabs                 # ElevenLabs TTS (fallback)
 requests                   # HTTP downloads (avatar video, audio files)
 
-# ── Web framework (Timothee) ──────────────────────────────────────────────────
+# ── Web framework (Timothee) ─────────────────────────────────────────────────
 fastapi[standard]
 uvicorn[standard]
 python-multipart
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────────────────────
 pydantic-settings
+pydantic
 python-dotenv
 
 # ── Enrichment — URL / GitHub repo context (Timothee) ────────────────────────
