@@ -7,9 +7,6 @@ numpy
 # Script generation
 mistralai
 
-# fal.ai (TTS via Kokoro + avatar via VEED Fabric 1.0)
-fal-client
-
 # Web framework
 fastapi[standard]
 uvicorn[standard]
@@ -18,9 +15,6 @@ python-multipart
 # Config
 pydantic-settings
 python-dotenv
-
-# Database (optional — not used in MVP)
-supabase
 
 # Enrichment
 httpx

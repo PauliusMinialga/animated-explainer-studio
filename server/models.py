@@ -27,7 +27,13 @@ class GenerateRequest(BaseModel):
     mode: Mode = Mode.concept
     level: Level = Level.beginner
     mood: Mood = Mood.friendly
-    avatar_image_url: Optional[str] = None
+
+
+class TTSScriptResponse(BaseModel):
+    """3-part narration for Bote's TTS pipeline."""
+    intro: str
+    info: str
+    outro: str
 
 
 class JobStatus(str, Enum):
@@ -41,8 +47,8 @@ class JobResponse(BaseModel):
     job_id: str
     status: JobStatus
     progress: Optional[str] = None
-    animation_url: Optional[str] = None   # Manim output
-    avatar_url: Optional[str] = None      # fal.ai talking-head output
+    animation_url: Optional[str] = None
+    tts_script: Optional[TTSScriptResponse] = None
     error: Optional[str] = None
 
 
@@ -55,5 +61,4 @@ class CachedVideo(BaseModel):
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     duration_seconds: Optional[float] = None
-    # Whether a pre-built Manim script exists locally
     has_script: bool = False

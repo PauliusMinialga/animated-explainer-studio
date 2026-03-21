@@ -2,10 +2,10 @@
 Generate endpoint with async job tracking.
 
 POST /generate   → starts background pipeline, returns job_id immediately
-GET  /jobs/{id}  → poll for status, progress, animation_url, avatar_url
+GET  /jobs/{id}  → poll for status, progress, animation_url, tts_script
 
-Videos are saved locally and served via GET /files/{job_id}/{filename}.
-No server-side merge: both videos composited in the browser via CSS overlay.
+Pipeline: prompt → Mistral (manim script + 3-part narration) → Manim render → done.
+TTS and avatar are handled separately by Bote's pipeline.
 """
 
 import asyncio
@@ -15,18 +15,15 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from models import GenerateRequest, JobResponse, JobStatus
+from models import GenerateRequest, JobResponse, JobStatus, TTSScriptResponse
 from pipeline.enrich import enrich_prompt
 from pipeline.scripts import generate_scripts
 from pipeline.manim_render import render_manim
-from pipeline.tts import generate_tts
-from pipeline.avatar import generate_avatar
 from database import job_dir
 from catalog import CATALOG_BY_SLUG
 
 router = APIRouter(tags=["generate"])
 
-# In-memory job store — sufficient for hackathon
 _jobs: dict[str, dict] = {}
 
 
@@ -41,7 +38,7 @@ async def generate(req: GenerateRequest, background_tasks: BackgroundTasks):
         "status": JobStatus.pending,
         "progress": "Queued",
         "animation_url": None,
-        "avatar_url": None,
+        "tts_script": None,
         "error": None,
     }
     background_tasks.add_task(_run_pipeline, job_id, req)
@@ -68,14 +65,14 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
         catalog_entry = CATALOG_BY_SLUG.get(slug_guess)
         use_cached_script = catalog_entry and catalog_entry.has_script
 
-        _set(job_id, progress="Generating scripts with Claude…")
+        _set(job_id, progress="Generating scripts…")
         scripts = generate_scripts(
             enriched_prompt,
             mode=req.mode,
             level=req.level,
             mood=req.mood,
         )
-        narration = scripts["narration"]
+        tts_script = scripts["tts_script"]
 
         if use_cached_script:
             script_path = Path(__file__).parent.parent / catalog_entry.script_path
@@ -86,28 +83,14 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             scene_class = "GeneratedScene"
             manim_script_str = scripts["manim_script"]
 
-        _set(job_id, progress="Rendering animation & generating voice in parallel…")
-
-        async def _render():
-            return await render_manim(
-                out_dir,
-                script_str=manim_script_str,
-                script_path=script_path,
-                scene_class=scene_class,
-            )
-
-        # Manim render and Kokoro TTS run in parallel
-        animation_path, audio_url = await asyncio.gather(_render(), generate_tts(narration))
-
-        _set(job_id, progress="Generating avatar video…")
-        avatar_path = out_dir / "avatar.mp4"
-        await generate_avatar(
-            audio_url,
-            avatar_path,
-            avatar_image_url=req.avatar_image_url,
+        _set(job_id, progress="Rendering animation…")
+        animation_path = await render_manim(
+            out_dir,
+            script_str=manim_script_str,
+            script_path=script_path,
+            scene_class=scene_class,
         )
 
-        # Copy animation to a stable output path
         final_animation = out_dir / "animation.mp4"
         if animation_path != final_animation:
             shutil.copy2(animation_path, final_animation)
@@ -117,7 +100,11 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             status=JobStatus.done,
             progress="Done",
             animation_url=f"/files/{job_id}/animation.mp4",
-            avatar_url=f"/files/{job_id}/avatar.mp4",
+            tts_script=TTSScriptResponse(
+                intro=tts_script.intro,
+                info=tts_script.info,
+                outro=tts_script.outro,
+            ),
         )
 
     except Exception as exc:
