@@ -397,7 +397,7 @@ const Premium = () => {
                     mode === m ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {m === "concept" ? "Concept Mode" : "Code Mode"}
+                  {m === "concept" ? "Prompt Mode" : "Repo Mode"}
                 </button>
               ))}
             </div>
