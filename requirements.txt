@@ -26,6 +26,7 @@ pydantic_core
 python-dotenv
 python-multipart
 requests
+routers
 runware
 typing-inspection
 typing_extensions
