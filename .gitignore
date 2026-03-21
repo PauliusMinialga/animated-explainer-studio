@@ -36,7 +36,6 @@ lerna-debug.log*
 # Python
 __pycache__/
 *.pyc
-.python-version
 env
 
 # Virtual env
