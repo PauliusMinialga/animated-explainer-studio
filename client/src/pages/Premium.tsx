@@ -85,7 +85,7 @@ const Premium = () => {
     const finalTimer = setTimeout(() => {
       setGenerating(false);
       setFakeStep(FAKE_STEPS.length);
-      setVideoUrl(item.file);
+      setVideoUrl(file);
     }, FAKE_STEPS.length * 1200 + 800);
     timerRef.current.push(finalTimer);
   };
