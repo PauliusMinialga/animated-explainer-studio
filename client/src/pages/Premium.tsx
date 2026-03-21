@@ -9,9 +9,6 @@ const avatars = [
   { id: "ava1", name: "Nova", emoji: "🤖" },
   { id: "ava2", name: "Sage", emoji: "🧑‍🏫" },
   { id: "ava3", name: "Pixel", emoji: "👾" },
-  { id: "ava4", name: "Aria", emoji: "🎙️" },
-  { id: "ava5", name: "Byte", emoji: "💻" },
-  { id: "ava6", name: "Echo", emoji: "🔊" },
 ];
 
 const moods = ["Friendly", "Technical", "Energetic", "Calm"];
@@ -156,7 +153,7 @@ const Premium = () => {
         <section className="relative mt-10">
           {!isPremium && <LockedOverlay label="Premium — Upgrade to choose an avatar" />}
           <h2 className="font-display text-lg font-semibold">Choose Avatar</h2>
-          <div className={`mt-4 grid grid-cols-3 gap-4 sm:grid-cols-6 ${!isPremium ? "pointer-events-none opacity-40" : ""}`}>
+          <div className={`mt-4 grid grid-cols-3 gap-4 ${!isPremium ? "pointer-events-none opacity-40" : ""}`}>
             {avatars.map((a) => (
               <button
                 key={a.id}
