@@ -1,69 +1,109 @@
-import { useState, useRef } from "react";
-import { Link } from "react-router-dom";
-import { Play, Code, Sparkles, Video, Loader2, Check, X } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Play, Code, Sparkles, Video, Loader2, Check, X, Github } from "lucide-react";
 
 const logoNames = ["TechCorp", "DevStudio", "CodeBase", "Synthetix", "NeuralNet", "DataFlow", "CloudOps"];
 
-const demoConcepts = [
-  { label: "Recursion.py", topic: "recursion" },
-  { label: "BinarySearch.js", topic: "binary_search" },
-  { label: "TCP_Handshake.md", topic: "tcp_handshake" },
-];
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-const FAKE_STEPS = [
-  "Analyzing concept…",
-  "Generating script…",
-  "Rendering animation…",
-  "Adding voiceover…",
-];
+const PROGRESS_LABELS: Record<string, string> = {
+  "Queued": "Queued…",
+  "Ingesting GitHub repo…": "Fetching repository…",
+  "Analyzing architecture…": "Analyzing architecture…",
+  "Generating storyboard…": "Generating storyboard…",
+  "Assembling narration…": "Assembling narration…",
+  "Generating scene audio…": "Generating voiceover…",
+  "Generating avatar videos…": "Creating avatar…",
+  "Enriching prompt…": "Enriching prompt…",
+  "Generating scripts…": "Generating animation…",
+  "Rendering animation…": "Rendering animation…",
+  "Generating avatar & voice…": "Adding voiceover…",
+  "Assembling final video…": "Assembling video…",
+};
 
 const Index = () => {
-  const [selected, setSelected] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [fakeStep, setFakeStep] = useState(-1);
+  const [progress, setProgress] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [doneVideo, setDoneVideo] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleConceptClick = (topic: string) => {
-    setSelected(topic);
-    setDoneVideo(null);
-    setGenerating(false);
-    setFakeStep(-1);
-  };
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, []);
 
-  const handleGenerate = () => {
-    if (!selected || generating) return;
+  const handleGenerate = async () => {
+    const input = prompt.trim();
+    if (!input || generating) return;
+
     setGenerating(true);
+    setProgress("Submitting…");
+    setError(null);
     setDoneVideo(null);
-    setFakeStep(0);
 
-    // Clear any previous timers
-    timerRef.current.forEach(clearTimeout);
-    timerRef.current = [];
+    try {
+      // Submit job
+      const res = await fetch(`${API_BASE}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: input, mood: "friendly", level: "beginner", mode: "concept" }),
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const { job_id } = await res.json();
 
-    // Walk through fake steps, then show the video
-    FAKE_STEPS.forEach((_, i) => {
-      const t = setTimeout(() => setFakeStep(i), i * 1200);
-      timerRef.current.push(t);
-    });
+      // Poll for completion
+      const poll = async () => {
+        try {
+          const r = await fetch(`${API_BASE}/jobs/${job_id}`);
+          const data = await r.json();
 
-    const finalTimer = setTimeout(() => {
+          setProgress(PROGRESS_LABELS[data.progress] || data.progress || "Processing…");
+
+          if (data.status === "failed") {
+            setError(data.error || "Generation failed");
+            setGenerating(false);
+            return;
+          }
+
+          if (data.status === "done") {
+            setGenerating(false);
+            if (data.job_type === "repo") {
+              // Redirect to React Flow player
+              navigate(`/repo/${job_id}`);
+            } else {
+              // Show video inline
+              setDoneVideo(data.animation_url || data.final_url);
+            }
+            return;
+          }
+
+          pollRef.current = setTimeout(poll, 2000);
+        } catch (err: any) {
+          setError(err.message);
+          setGenerating(false);
+        }
+      };
+
+      pollRef.current = setTimeout(poll, 1000);
+    } catch (err: any) {
+      setError(err.message);
       setGenerating(false);
-      setFakeStep(FAKE_STEPS.length);
-      // TODO: Replace with real Supabase storage URLs from demo_videos table
-      setDoneVideo(`/demo/${selected}.mp4`);
-    }, FAKE_STEPS.length * 1200 + 800);
-    timerRef.current.push(finalTimer);
+    }
   };
 
   const handleClose = () => {
-    timerRef.current.forEach(clearTimeout);
-    timerRef.current = [];
+    if (pollRef.current) clearTimeout(pollRef.current);
     setDoneVideo(null);
     setGenerating(false);
-    setFakeStep(-1);
+    setProgress("");
+    setError(null);
   };
+
+  const isGithubUrl = prompt.trim().startsWith("https://github.com/");
 
   return (
     <div>
@@ -77,93 +117,80 @@ const Index = () => {
             <span className="hero-accent-text">AI</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-            Paste your code or describe a concept — our AI generates beautiful animated
-            video explanations in seconds. Learn, teach, and share visually.
+            Paste a GitHub repo URL or describe a concept — our AI generates beautiful animated
+            explanations in seconds. Learn, teach, and share visually.
           </p>
-          <div className="mt-10 flex items-center justify-center gap-4">
-            <Link
-              to="/signup"
-              className="inline-flex h-12 items-center gap-2 rounded-xl bg-primary px-7 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-xl"
-            >
-              Try It Free
-            </Link>
-            <a
-              href="#demo"
-              className="inline-flex h-12 items-center gap-2 rounded-xl border bg-card px-7 text-sm font-semibold transition-colors hover:bg-secondary"
-            >
-              <Play className="h-4 w-4" /> Watch Demo
-            </a>
-          </div>
         </div>
 
         {/* Prompt box */}
         <div className="mx-auto mt-16 max-w-2xl">
           <div className="peach-glow rounded-2xl p-6 shadow-xl shadow-peach/30">
-            <p className="text-sm text-muted-foreground">
-              Pick a concept to see it explained by our AI...
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {demoConcepts.map((c) => (
-                <button
-                  key={c.topic}
-                  onClick={() => handleConceptClick(c.topic)}
+            {/* Input field */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+                  placeholder="https://github.com/user/repo  or  Explain how binary search works"
                   disabled={generating}
-                  className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                    selected === c.topic
-                      ? "bg-accent text-accent-foreground ring-2 ring-accent/40"
-                      : "bg-accent/20 text-accent hover:bg-accent/30"
-                  } disabled:opacity-50`}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end">
+                  className="w-full rounded-xl border bg-background px-4 py-3 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
+                />
+                {isGithubUrl && (
+                  <Github className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
+                )}
+              </div>
               <button
                 onClick={handleGenerate}
-                disabled={!selected || generating}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
+                disabled={!prompt.trim() || generating}
+                className="inline-flex h-[46px] items-center gap-2 rounded-xl bg-accent px-5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50 shrink-0"
               >
                 {generating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Generating…
-                  </>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" /> Generate
-                  </>
+                  <Sparkles className="h-4 w-4" />
                 )}
+                {generating ? "Generating…" : "Generate"}
               </button>
             </div>
 
-            {/* Fake progress steps */}
-            {(generating || fakeStep === FAKE_STEPS.length) && !doneVideo && (
-              <div className="mt-4 space-y-2 rounded-xl border bg-card p-4">
-                {FAKE_STEPS.map((label, i) => {
-                  const done = i < fakeStep || fakeStep === FAKE_STEPS.length;
-                  const active = i === fakeStep && generating;
-                  return (
-                    <div key={i} className="flex items-center gap-2">
-                      {done ? (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent">
-                          <Check className="h-3 w-3 text-accent-foreground" />
-                        </div>
-                      ) : (
-                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${active ? "border-accent" : "border-muted"}`}>
-                          {active && <Loader2 className="h-3 w-3 animate-spin text-accent" />}
-                        </div>
-                      )}
-                      <span className={`text-xs ${done ? "font-medium" : active ? "text-foreground" : "text-muted-foreground"}`}>
-                        {label}
-                      </span>
-                    </div>
-                  );
-                })}
+            {/* Quick examples */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[
+                { label: "cal.com", value: "https://github.com/calcom/cal.com" },
+                { label: "shadcn/ui", value: "https://github.com/shadcn-ui/ui" },
+                { label: "Binary Search", value: "Explain how binary search works step by step" },
+              ].map((ex) => (
+                <button
+                  key={ex.label}
+                  onClick={() => { setPrompt(ex.value); setDoneVideo(null); setError(null); }}
+                  disabled={generating}
+                  className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/20 disabled:opacity-50 transition-colors"
+                >
+                  {ex.value.startsWith("https://github.com") && <Github className="h-3 w-3" />}
+                  {ex.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Progress */}
+            {generating && (
+              <div className="mt-4 flex items-center gap-3 rounded-xl border bg-card p-4">
+                <Loader2 className="h-4 w-4 animate-spin text-accent shrink-0" />
+                <span className="text-sm text-muted-foreground">{progress}</span>
+              </div>
+            )}
+
+            {/* Error */}
+            {error && (
+              <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                <p className="text-sm text-red-400">{error}</p>
               </div>
             )}
           </div>
 
-          {/* Video result */}
+          {/* Video result (code explanations) */}
           {doneVideo && (
             <div className="mt-6 overflow-hidden rounded-2xl border bg-card shadow-lg">
               <div className="relative aspect-video bg-black">
@@ -183,31 +210,13 @@ const Index = () => {
                 </button>
               </div>
               <div className="p-4">
-                <p className="text-sm font-medium">
-                  {demoConcepts.find((c) => c.topic === selected)?.label ?? "Demo"} — AI Explanation
-                </p>
+                <p className="text-sm font-medium">AI Explanation</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  This is a pre-generated demo. Sign up to create custom videos!
+                  Generated from your prompt. Sign up to save and share!
                 </p>
               </div>
             </div>
           )}
-        </div>
-      </section>
-
-      {/* Demo */}
-      <section id="demo" className="bg-secondary/50 px-6 py-20">
-        <div className="mx-auto max-w-4xl text-center">
-          <h2 className="font-display text-3xl font-bold">See it in action</h2>
-          <p className="mt-3 text-muted-foreground">Watch how CodeViz turns a simple concept into an animated explanation</p>
-          <div className="mx-auto mt-10 aspect-video max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-lg">
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-secondary to-muted">
-              <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                <Play className="h-16 w-16 rounded-full bg-primary p-4 text-primary-foreground" />
-                <span className="text-sm font-medium">Demo Video Placeholder</span>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -218,8 +227,8 @@ const Index = () => {
           <div className="mt-14 grid gap-8 md:grid-cols-3">
             {[
               { icon: Code, step: "01", title: "Input your code or concept", desc: "Paste a code snippet, describe an algorithm, or link a GitHub repo." },
-              { icon: Sparkles, step: "02", title: "AI generates explanation", desc: "Our AI writes a script, creates animations, and adds voiceover — automatically." },
-              { icon: Video, step: "03", title: "Watch and share", desc: "Get a polished animated video you can download, embed, or share anywhere." },
+              { icon: Sparkles, step: "02", title: "AI generates explanation", desc: "Our AI analyzes the architecture, writes a script, and creates an interactive walkthrough." },
+              { icon: Video, step: "03", title: "Watch and share", desc: "Get a narrated visual explanation you can explore, download, or share." },
             ].map((item) => (
               <div key={item.step} className="group rounded-2xl border bg-card p-8 transition-all hover:shadow-lg">
                 <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
