@@ -78,7 +78,17 @@ def veed_request_with_files(
     return request_to_link_and_format(req)
 
 
-def text_to_speech_file(text: str, fileName: str) -> Path:
+def avatar_to_voice_string(avatar: Avatar) -> str:
+    match avatar:
+        case Avatar.SUPER_MAN:
+            return "Vinny"
+        case Avatar.WONDER_WOMAN:
+            return "Ashley"
+        case Avatar.C3PO:
+            return "Hades"
+
+
+def text_to_speech_file(text: str, fileName: str, avatar: Avatar) -> Path:
     load_dotenv()
     apiKey = os.getenv("RUNWARE_API_KEY")
     if not apiKey:
@@ -93,7 +103,7 @@ def text_to_speech_file(text: str, fileName: str) -> Path:
                 model="inworld:tts@1.5-mini",  # Runware Inworld TTS-1.5 Mini
                 speech=IAudioSpeech(
                     text=text,
-                    voice="Oliver",  # Default voice
+                    voice=avatar_to_voice_string(avatar),  # Default voice
                 ),
             )
             results = await runware.audioInference(requestAudio=request)
