@@ -52,6 +52,7 @@ const Premium = () => {
   const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
   const [selectedPremadeFile, setSelectedPremadeFile] = useState<string | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   // Generation state
   const [generating, setGenerating] = useState(false);
