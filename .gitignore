@@ -45,6 +45,7 @@ server/the_project/manim-env/
 # Manim renders
 media/
 animations/
+output/**/*.mp4
 
 # Claude
 .claude_history
