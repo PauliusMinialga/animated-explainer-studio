@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     mistral_api_key: str = ""
+    github_token: str = ""
 
     # Bote's pipeline
     fal_key: str = ""

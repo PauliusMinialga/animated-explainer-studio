@@ -10,6 +10,7 @@ Pipeline:
   Both paths: Manim render → Bote's VEED pipeline → final merge → done.
 """
 
+import asyncio
 import json
 import logging
 import shutil
@@ -153,7 +154,8 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
 
             _set(job_id, progress="Assembling final video…")
             final_path = out_dir / "final.mp4"
-            merge_final(
+            await asyncio.to_thread(
+                merge_final,
                 intro_path=veed.intro_video,
                 animation_path=final_animation,
                 info_audio_path=veed.info_audio,

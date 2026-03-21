@@ -1,7 +1,15 @@
 """Deterministic Manim script generation from a repo component graph.
 
-Takes structured node/edge data (produced by Mistral as JSON) and renders
+Takes structured node/edge data (produced by the LLM as JSON) and renders
 a valid, crash-proof Manim scene — no LLM writes Manim code here.
+
+Scene structure:
+  Phase 0 — Title card (repo name, centre)
+  Phase 1 — Central node fades in
+  Phase 2 — Component nodes appear one-by-one (radially)
+  Phase 3 — Center → component arrows drawn one-by-one
+  Phase 4 — Inter-component arrows drawn one-by-one
+  Phase 5 — Global view: brief pulse / highlight of everything (outro avatar speaks here)
 """
 
 import math
@@ -10,6 +18,21 @@ _NODE_COLORS = [
     "GOLD_D", "GREEN_D", "TEAL_D", "PURPLE_D",
     "RED_D", "MAROON_D", "ORANGE", "PINK",
 ]
+
+# Manim frame: width=14.22, height=8.0  →  safe y ∈ [-3.5, 3.5], x ∈ [-6.5, 6.5]
+_MAX_RADIUS   = 2.8   # nodes never exceed this radius from centre
+_TITLE_Y      = 3.6   # title sits above the graph
+_STEP_LABEL_Y = -3.6  # step label sits below
+
+
+def _node_size(n: int) -> tuple[float, float, int]:
+    """Return (rect_width, rect_height, font_size) scaled for node count."""
+    if n <= 5:
+        return 2.4, 0.9, 18
+    elif n <= 8:
+        return 2.0, 0.75, 16
+    else:
+        return 1.7, 0.65, 14
 
 
 def render_graph_to_manim(
@@ -33,24 +56,23 @@ def render_graph_to_manim(
     n = len(nodes)
 
     # ── Timing: target animation duration = estimated TTS speech duration ─────
-    # Average speech rate ~130 wpm. Add 3s padding at end for avatar transition.
     words = len(tts_info.split()) if tts_info else 40
     target_s = max(15.0, (words / 130) * 60 + 3)
 
-    # Budget per phase (seconds):
-    #   Phase 1 — central node fade in:   1 step
-    #   Phase 2 — component nodes:        n steps
-    #   Phase 3 — center arrows:          n steps
-    #   Phase 4 — inter-component arrows: len(edges) steps
-    #   Final wait:                        2s fixed
     n_edges = len(edges)
-    total_steps = 1 + n + n + n_edges
-    available = max(target_s - 2.0, 10.0)
-    step_time = round(available / max(total_steps, 1), 2)
-    step_time = max(0.4, min(step_time, 1.2))  # clamp: 0.4s–1.2s per step
-    wait_between = round(step_time * 0.3, 2)
+    # phases: 1 (title) + 1 (central) + n (nodes) + n (center arrows) + n_edges (inter-arrows) + 1 (global view)
+    total_steps = 2 + n + n + n_edges + 1
+    available   = max(target_s - 3.0, 10.0)
+    step_time   = round(available / max(total_steps, 1), 2)
+    step_time   = max(0.4, min(step_time, 1.2))
+    wait_between = round(step_time * 0.25, 2)
 
-    radius = max(3.0, n * 0.55)
+    # Radius: spread nodes evenly but stay within safe zone
+    # For small n use full radius; for large n scale down so nodes don't overlap
+    radius = min(_MAX_RADIUS, max(1.8, n * 0.42))
+    radius = round(radius, 4)
+
+    rw, rh, fs = _node_size(n)
 
     lines = [
         "from manim import *",
@@ -59,35 +81,47 @@ def render_graph_to_manim(
         "",
         "class GeneratedScene(Scene):",
         "    def construct(self):",
-        "        # ── Central node ──────────────────────────────────────────",
+        "",
+        "        # ── Phase 0: Title ────────────────────────────────────────",
+        f"        _title = Text({repr(repo_name)}, font_size=28, color=WHITE, weight=BOLD)",
+        f"        _title.move_to(np.array([0.0, {_TITLE_Y}, 0.0]))",
+        f"        self.play(FadeIn(_title), run_time={step_time})",
+        f"        self.wait({wait_between})",
+        "",
+        "        # ── Phase 1: Central node ─────────────────────────────────",
         "        _c_rect = Rectangle(",
         "            width=2.6, height=1.0, fill_opacity=0.9,",
         "            fill_color=BLUE_E, stroke_color=WHITE, stroke_width=2,",
         "        )",
-        f"        _c_text = Text({repr(repo_name)}, font_size=22, color=WHITE)",
+        f"        _c_text = Text({repr(repo_name)}, font_size=20, color=WHITE)",
         "        _c_text.move_to(_c_rect.get_center())",
         "        central = VGroup(_c_rect, _c_text).move_to(ORIGIN)",
         "        node_list = []",
         '        node_map = {"center": central}',
         "",
+        f"        self.play(FadeIn(central), run_time={step_time})",
+        f"        self.wait({wait_between})",
+        "",
     ]
 
-    # Component nodes — radially placed
+    # Component nodes — radially placed, clamped to safe zone
     for i, node in enumerate(nodes):
-        color = _NODE_COLORS[i % len(_NODE_COLORS)]
-        angle = 2 * math.pi * i / n
-        x = round(math.cos(angle) * radius, 4)
-        y = round(math.sin(angle) * radius, 4)
-        label = node.get("label", node.get("id", f"node{i}"))
+        color  = _NODE_COLORS[i % len(_NODE_COLORS)]
+        angle  = 2 * math.pi * i / n
+        x      = round(math.cos(angle) * radius, 4)
+        y      = round(math.sin(angle) * radius, 4)
+        # Clamp y so title and step label don't collide
+        y      = round(max(-3.0, min(3.0, y)), 4)
+        label  = node.get("label", node.get("id", f"node{i}"))
         node_id = node.get("id", f"node{i}")
 
         lines += [
             f"        # node: {node_id}",
             f"        _r{i} = Rectangle(",
-            f"            width=2.4, height=0.9, fill_opacity=0.85,",
+            f"            width={rw}, height={rh}, fill_opacity=0.85,",
             f"            fill_color={color}, stroke_color=WHITE, stroke_width=1.5,",
             f"        )",
-            f"        _t{i} = Text({repr(label)}, font_size=18, color=WHITE)",
+            f"        _t{i} = Text({repr(label)}, font_size={fs}, color=WHITE)",
             f"        _t{i}.move_to(_r{i}.get_center())",
             f"        _n{i} = VGroup(_r{i}, _t{i}).move_to(np.array([{x}, {y}, 0.0]))",
             f"        node_list.append(_n{i})",
@@ -95,54 +129,71 @@ def render_graph_to_manim(
             "",
         ]
 
-    # Center → component arrows (one per component node, drawn via loop)
     lines += [
-        "        # ── Center → component arrows ─────────────────────────────",
+        "        # ── Phase 2: Component nodes appear one by one ───────────",
+    ]
+    for i in range(n):
+        lines += [
+            f"        self.play(FadeIn(_n{i}), run_time={step_time})",
+            f"        self.wait({wait_between})",
+        ]
+
+    # Center → component arrows
+    lines += [
+        "",
+        "        # ── Phase 3: Center → component arrows ───────────────────",
         "        center_arrows = []",
         "        for _node in node_list:",
-        "            center_arrows.append(Arrow(",
+        "            _arr = Arrow(",
         "                start=central.get_center(),",
         "                end=_node.get_center(),",
-        "                buff=0.6,",
+        "                buff=0.55,",
         "                stroke_width=2.5,",
         "                color=GRAY_B,",
         "                max_tip_length_to_length_ratio=0.15,",
-        "            ))",
+        "            )",
+        "            center_arrows.append(_arr)",
+        f"            self.play(GrowArrow(_arr), run_time={step_time})",
+        f"            self.wait({wait_between})",
         "",
-        "        # ── Inter-component arrows ────────────────────────────────",
+        "        # ── Phase 4: Inter-component arrows ───────────────────────",
         "        inter_arrows = []",
     ]
 
     for edge in edges:
         from_id = edge.get("from", "")
-        to_id = edge.get("to", "")
+        to_id   = edge.get("to", "")
         lines += [
             f"        if {repr(from_id)} in node_map and {repr(to_id)} in node_map:",
-            f"            inter_arrows.append(Arrow(",
+            f"            _ia = Arrow(",
             f"                start=node_map[{repr(from_id)}].get_center(),",
             f"                end=node_map[{repr(to_id)}].get_center(),",
-            f"                buff=0.55,",
+            f"                buff=0.5,",
             f"                stroke_width=2.5,",
             f"                color=YELLOW_D,",
             f"                max_tip_length_to_length_ratio=0.15,",
-            f"            ))",
+            f"            )",
+            f"            inter_arrows.append(_ia)",
+            f"            self.play(GrowArrow(_ia), run_time={step_time})",
+            f"            self.wait({wait_between})",
         ]
 
+    # Global view phase — highlight everything simultaneously
+    global_wait = round(step_time * 1.5, 2)
     lines += [
         "",
-        "        # ── Animation sequence ────────────────────────────────────",
-        f"        self.play(FadeIn(central), run_time={step_time})",
-        f"        self.wait({wait_between})",
-        "        for _node in node_list:",
-        f"            self.play(FadeIn(_node), run_time={step_time})",
-        f"            self.wait({wait_between})",
-        "        for _arrow in center_arrows:",
-        f"            self.play(GrowArrow(_arrow), run_time={step_time})",
-        f"            self.wait({wait_between})",
-        "        for _arrow in inter_arrows:",
-        f"            self.play(GrowArrow(_arrow), run_time={step_time})",
-        f"            self.wait({wait_between})",
-        "        self.wait(2)",
+        "        # ── Phase 5: Global view (all components visible) ────────",
+        "        _summary = Text(",
+        f"            {repr(f'Architecture: {repo_name}')},",
+        "            font_size=16, color=YELLOW,",
+        "        )",
+        f"        _summary.move_to(np.array([0.0, {_STEP_LABEL_Y}, 0.0]))",
+        "        self.play(",
+        "            FadeIn(_summary),",
+        "            *[_n.animate.set_color(WHITE) for _n in node_list],",
+        f"            run_time={round(step_time * 0.8, 2)},",
+        "        )",
+        f"        self.wait({global_wait})",
     ]
 
     return "\n".join(lines)
