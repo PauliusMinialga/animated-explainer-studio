@@ -123,8 +123,10 @@ export type Database = {
           avatar: string | null
           created_at: string
           error_message: string | null
+          github_url: string | null
           id: string
           level: string | null
+          mode: string
           mood: string | null
           status: string
           topic: string
@@ -135,8 +137,10 @@ export type Database = {
           avatar?: string | null
           created_at?: string
           error_message?: string | null
+          github_url?: string | null
           id?: string
           level?: string | null
+          mode?: string
           mood?: string | null
           status?: string
           topic: string
@@ -147,8 +151,10 @@ export type Database = {
           avatar?: string | null
           created_at?: string
           error_message?: string | null
+          github_url?: string | null
           id?: string
           level?: string | null
+          mode?: string
           mood?: string | null
           status?: string
           topic?: string
