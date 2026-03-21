@@ -16,6 +16,7 @@ def render_graph_to_manim(
     repo_name: str,
     nodes: list[dict],
     edges: list[dict],
+    tts_info: str = "",
 ) -> str:
     """
     Generate a deterministic Manim scene for a repo mind map.
@@ -24,11 +25,31 @@ def render_graph_to_manim(
         repo_name: displayed as the central node label
         nodes: list of {id: str, label: str} — component nodes
         edges: list of {from: str, to: str} — "center" is a valid node id
+        tts_info: the narration spoken during the animation (used to estimate duration)
     """
     if not nodes:
         return _minimal_scene(repo_name)
 
     n = len(nodes)
+
+    # ── Timing: target animation duration = estimated TTS speech duration ─────
+    # Average speech rate ~130 wpm. Add 3s padding at end for avatar transition.
+    words = len(tts_info.split()) if tts_info else 40
+    target_s = max(15.0, (words / 130) * 60 + 3)
+
+    # Budget per phase (seconds):
+    #   Phase 1 — central node fade in:   1 step
+    #   Phase 2 — component nodes:        n steps
+    #   Phase 3 — center arrows:          n steps
+    #   Phase 4 — inter-component arrows: len(edges) steps
+    #   Final wait:                        2s fixed
+    n_edges = len(edges)
+    total_steps = 1 + n + n + n_edges
+    available = max(target_s - 2.0, 10.0)
+    step_time = round(available / max(total_steps, 1), 2)
+    step_time = max(0.4, min(step_time, 1.2))  # clamp: 0.4s–1.2s per step
+    wait_between = round(step_time * 0.3, 2)
+
     radius = max(3.0, n * 0.55)
 
     lines = [
@@ -110,16 +131,17 @@ def render_graph_to_manim(
     lines += [
         "",
         "        # ── Animation sequence ────────────────────────────────────",
-        "        self.play(FadeIn(central))",
-        "        self.wait(0.4)",
+        f"        self.play(FadeIn(central), run_time={step_time})",
+        f"        self.wait({wait_between})",
         "        for _node in node_list:",
-        "            self.play(FadeIn(_node), run_time=0.35)",
-        "        self.wait(0.3)",
+        f"            self.play(FadeIn(_node), run_time={step_time})",
+        f"            self.wait({wait_between})",
         "        for _arrow in center_arrows:",
-        "            self.play(GrowArrow(_arrow), run_time=0.25)",
-        "        self.wait(0.4)",
+        f"            self.play(GrowArrow(_arrow), run_time={step_time})",
+        f"            self.wait({wait_between})",
         "        for _arrow in inter_arrows:",
-        "            self.play(GrowArrow(_arrow), run_time=0.35)",
+        f"            self.play(GrowArrow(_arrow), run_time={step_time})",
+        f"            self.wait({wait_between})",
         "        self.wait(2)",
     ]
 
