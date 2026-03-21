@@ -21,3 +21,4 @@ urllib3
 websockets
 runware
 uvicorn
+fastapi
