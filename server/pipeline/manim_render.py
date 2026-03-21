@@ -7,6 +7,7 @@ Writes temp files as needed, runs `manim -ql`, returns the path to the output mp
 
 import asyncio
 import os
+import sys
 import tempfile
 from pathlib import Path
 
@@ -42,7 +43,7 @@ async def render_manim(
         media_dir.mkdir(parents=True, exist_ok=True)
 
         cmd = [
-            "manim",
+            sys.executable, "-m", "manim",
             "-ql",
             "--output_file", "animation",
             "--media_dir", str(media_dir),
