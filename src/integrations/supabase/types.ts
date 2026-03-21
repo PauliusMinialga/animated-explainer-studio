@@ -14,7 +14,149 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      demo_videos: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          sort_order: number
+          storage_path: string
+          thumbnail_url: string | null
+          title: string
+          topic: string | null
+          video_url: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          sort_order?: number
+          storage_path: string
+          thumbnail_url?: string | null
+          title: string
+          topic?: string | null
+          video_url: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          sort_order?: number
+          storage_path?: string
+          thumbnail_url?: string | null
+          title?: string
+          topic?: string | null
+          video_url?: string
+        }
+        Relationships: []
+      }
+      generated_videos: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          id: string
+          request_id: string
+          storage_path: string | null
+          user_id: string
+          video_url: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          request_id: string
+          storage_path?: string | null
+          user_id: string
+          video_url: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          request_id?: string
+          storage_path?: string | null
+          user_id?: string
+          video_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_videos_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "video_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          tier?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          tier?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      video_requests: {
+        Row: {
+          avatar: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          level: string | null
+          mood: string | null
+          status: string
+          topic: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          level?: string | null
+          mood?: string | null
+          status?: string
+          topic: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          level?: string | null
+          mood?: string | null
+          status?: string
+          topic?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
