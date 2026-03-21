@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Crown, Download, Loader2, Play } from "lucide-react";
-import { Navigate, Link } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import AlgorithmBrowser, { type AlgorithmItem } from "@/components/AlgorithmBrowser";
 
 const premadeConcepts = [
