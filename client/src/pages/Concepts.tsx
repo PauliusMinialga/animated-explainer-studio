@@ -243,13 +243,28 @@ const Concepts = () => {
             <p className="mt-1 text-sm text-muted-foreground">
               Upgrade to Premium to write your own prompts, choose avatars, and customise mood & level.
             </p>
-            <Link
-              to="/premium"
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
+            <button
+              onClick={async () => {
+                if (!user || upgrading) return;
+                setUpgrading(true);
+                const { error } = await supabase
+                  .from("profiles")
+                  .update({ tier: "premium" })
+                  .eq("user_id", user.id);
+                if (error) {
+                  toast({ title: "Error", description: "Upgrade failed. Please try again.", variant: "destructive" });
+                } else {
+                  await refreshProfile();
+                  toast({ title: "🎉 Welcome to Premium!", description: "You now have full access to custom video generation." });
+                }
+                setUpgrading(false);
+              }}
+              disabled={upgrading}
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
             >
-              <Crown className="h-4 w-4" />
-              Upgrade to Premium
-            </Link>
+              {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+              {upgrading ? "Upgrading…" : "Upgrade to Premium"}
+            </button>
           </div>
         )}
       </div>
