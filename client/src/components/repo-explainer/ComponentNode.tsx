@@ -39,7 +39,6 @@ function ComponentNode({ data }: NodeProps<ComponentNodeData>) {
         borderRadius: 12,
         padding: "10px 16px",
         minWidth: 140,
-        maxWidth: 200,
         opacity: data.dimmed ? 0.3 : 1,
         transform: data.highlighted ? "scale(1.05)" : data.dimmed ? "scale(0.95)" : "scale(1)",
         boxShadow: data.highlighted ? `0 0 16px ${style.border}60` : "0 4px 12px rgba(0,0,0,0.3)",
@@ -50,12 +49,12 @@ function ComponentNode({ data }: NodeProps<ComponentNodeData>) {
       <Handle type="source" position={Position.Bottom} style={{ background: "#ffffff66", width: 8, height: 8 }} />
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <span style={{ fontSize: 14 }}>{style.icon}</span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>
           {data.label}
         </span>
       </div>
       {data.responsibility && !data.dimmed && (
-        <p style={{ fontSize: 10, lineHeight: 1.3, color: "#ffffff99", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+        <p style={{ fontSize: 10, lineHeight: 1.3, color: "#ffffff99", margin: 0 }}>
           {data.responsibility}
         </p>
       )}
