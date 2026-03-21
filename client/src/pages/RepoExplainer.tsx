@@ -7,7 +7,7 @@ import { useParams, Link } from "react-router-dom";
 import { Loader2, ArrowLeft } from "lucide-react";
 import RepoPlayer from "@/components/repo-explainer/RepoPlayer";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://vizifi.onrender.com";
 
 interface JobData {
   job_id: string;

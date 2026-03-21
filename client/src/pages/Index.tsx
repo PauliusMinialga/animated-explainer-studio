@@ -4,7 +4,7 @@ import { Play, Code, Sparkles, Video, Loader2, Check, X, Github } from "lucide-r
 
 const logoNames = ["TechCorp", "DevStudio", "CodeBase", "Synthetix", "NeuralNet", "DataFlow", "CloudOps"];
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://vizifi.onrender.com";
 
 const PROGRESS_LABELS: Record<string, string> = {
   "Queued": "Queued…",

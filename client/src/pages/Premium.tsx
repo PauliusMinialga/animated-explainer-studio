@@ -120,7 +120,7 @@ const Premium = () => {
         });
       }
     }, POLL_INTERVAL);
-  }, [stopPolling]);
+  }, [stopPolling, navigate]);
 
   // Cleanup on unmount
   useEffect(() => {
