@@ -1,30 +1,17 @@
-# Animation
-manim
-moderngl
-pycairo
-numpy
-
-# Script generation
-mistralai
-openai
-
-# Bote's pipeline — TTS + avatar
+beautifulsoup4
 fal-client
-runware
-requests
-
-# Video assembly
-ffmpeg-python
-
-# Web framework
 fastapi[standard]
-uvicorn[standard]
-python-multipart
-
-# Config
+ffmpeg-python
+httpx
+manim
+mistralai
+moderngl
+numpy
+openai
+pycairo
 pydantic-settings
 python-dotenv
-
-# Enrichment
-httpx
-beautifulsoup4
+python-multipart
+requests
+runware
+uvicorn[standard]
