@@ -7,7 +7,7 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading, isPremium, signOut } = useAuth();
-  const homeRoute = isPremium ? "/premium" : "/";
+  const homeRoute = user ? (isPremium ? "/premium" : "/concepts") : "/";
 
   const handleLogout = async () => {
     await signOut();
@@ -41,10 +41,18 @@ const Navbar = () => {
           <div className="hidden items-center gap-6 text-sm font-medium sm:flex">
             <Link
               to={homeRoute}
-              className={`transition-colors hover:text-foreground ${["/", "/premium"].includes(location.pathname) ? "text-foreground" : "text-muted-foreground"}`}
+              className={`transition-colors hover:text-foreground ${["/", "/premium", "/concepts"].includes(location.pathname) ? "text-foreground" : "text-muted-foreground"}`}
             >
               Home
             </Link>
+            {user && isPremium && (
+              <Link
+                to="/concepts"
+                className={`transition-colors hover:text-foreground ${location.pathname === "/concepts" ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                Concepts
+              </Link>
+            )}
             {user && (
               <Link
                 to="/profile"

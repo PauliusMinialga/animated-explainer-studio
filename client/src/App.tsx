@@ -28,6 +28,7 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/concepts" element={<Concepts />} />
               <Route path="/premium" element={<Premium />} />
               <Route path="/repo/:jobId" element={<RepoExplainer />} />
             </Route>
