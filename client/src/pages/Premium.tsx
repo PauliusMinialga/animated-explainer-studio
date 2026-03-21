@@ -406,7 +406,7 @@ const Premium = () => {
               <>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Prompt</label>
-                  <p className="mb-2 text-xs text-muted-foreground">Describe a concept and optionally include code — we'll animate both.</p>
+                  <p className="mb-2 text-xs text-muted-foreground">Paste a concept description or a code snippet to animate.</p>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
