@@ -197,6 +197,14 @@ function FlowInner({ architecture, storyboard }: RepoExplainerFlowProps) {
             fontSize: 10,
             fill: isHighlighted ? "#fff" : "#ffffff60",
           },
+          labelShowBg: true,
+          labelBgStyle: {
+            fill: "#0a0a0f",
+            fillOpacity: 0.85,
+            rx: 4,
+            ry: 4,
+          },
+          labelBgPadding: [4, 2] as [number, number],
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: isHighlighted ? color : `${color}40`,
