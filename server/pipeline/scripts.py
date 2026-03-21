@@ -187,7 +187,7 @@ Return ONLY a valid JSON object — no markdown fences, no explanation:
   ],
   "tts": {{
     "intro": "1 sentence: what this repo does",
-    "info": "3–4 sentences about the main components and how they interact",
+    "info": "4-6 sentences narrated DURING the animation. Write them in the order components appear on screen: (1) introduce the repo, (2) describe each component as it appears, (3) explain the data/call flow connections between them",
     "outro": "1 sentence: key architectural pattern or takeaway"
   }}
 }}
@@ -244,7 +244,7 @@ def generate_repo_scripts(
     edges = data.get("edges", [])
     tts_data = data.get("tts", {})
 
-    manim_script = render_graph_to_manim(repo_name, nodes, edges)
+    manim_script = render_graph_to_manim(repo_name, nodes, edges, tts_info=tts_data.get("info", ""))
     tts = TTSScript(
         intro=tts_data.get("intro", ""),
         info=tts_data.get("info", ""),
