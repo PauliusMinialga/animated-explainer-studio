@@ -13,6 +13,7 @@ TTS and avatar are handled separately by Bote's pipeline.
 """
 
 import json
+import logging
 import shutil
 import uuid
 
@@ -24,6 +25,8 @@ from pipeline.enrich import enrich_prompt, ingest_github_repo
 from pipeline.scripts import generate_scripts, generate_repo_scripts
 from pipeline.manim_render import render_manim
 from database import job_dir
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["generate"])
 
@@ -63,6 +66,7 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
 
         if is_github_url:
             _set(job_id, status=JobStatus.running, progress="Ingesting GitHub repo…")
+            logger.info("[%s] Ingesting repo: %s", job_id, req.prompt.strip())
             try:
                 repo_content = await ingest_github_repo(req.prompt.strip())
             except ValueError as exc:
@@ -73,6 +77,7 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
                     status_code=status,
                     detail=f"Could not fetch repo (HTTP {status}): {req.prompt}",
                 )
+            logger.info("[%s] Repo ingested — %d chars", job_id, len(repo_content))
 
             _set(job_id, progress="Generating repo scripts…")
             manim_script, tts = generate_repo_scripts(
@@ -94,6 +99,19 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             )
             manim_script = scripts["manim_script"]
             tts = scripts["tts_script"]
+
+        # ── Debug: print generated artefacts to console ──────────────────────
+        logger.info(
+            "[%s] ── MANIM SCRIPT ──────────────────────────────────\n%s\n"
+            "─────────────────────────────────────────────────────",
+            job_id, manim_script,
+        )
+        logger.info(
+            "[%s] ── TTS SCRIPT ───────────────────────────────────\n"
+            "  INTRO: %s\n  INFO:  %s\n  OUTRO: %s\n"
+            "─────────────────────────────────────────────────────",
+            job_id, tts.intro, tts.info, tts.outro,
+        )
 
         # Persist raw Manim script for debugging
         (out_dir / "manim_script.py").write_text(manim_script, encoding="utf-8")
