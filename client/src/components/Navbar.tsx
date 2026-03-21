@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, User } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
+
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
