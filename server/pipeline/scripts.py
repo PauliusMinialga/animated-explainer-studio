@@ -19,45 +19,18 @@ from .graph_renderer import render_graph_to_manim
 logger = logging.getLogger(__name__)
 
 
-# ── LLM client (Gemini preferred, Mistral fallback) ───────────────────────────
+# ── LLM client (Mistral) ──────────────────────────────────────────────────────
 
 def _chat(system: str, user: str, temperature: float = 0.4) -> str:
-    """Send a chat completion and return the response text.
-
-    Uses Gemini Flash 2.0 if GEMINI_API_KEY is set, otherwise Mistral Small.
-    If Gemini quota is exhausted, automatically falls back to Mistral.
-    """
+    """Send a chat completion via Mistral and return the response text."""
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": user})
 
-    if settings.llm_provider == "gemini":
-        from openai import OpenAI
-        client = OpenAI(
-            api_key=settings.gemini_api_key,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        )
-        for model in ("gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash-latest"):
-            try:
-                resp = client.chat.completions.create(
-                    model=model, messages=messages, temperature=temperature,
-                )
-                logger.info("LLM: Gemini/%s", model)
-                return resp.choices[0].message.content.strip()
-            except Exception as exc:
-                if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc) or "404" in str(exc):
-                    logger.warning("Gemini %s unavailable, trying next", model)
-                    continue
-                raise
-        if not settings.mistral_api_key:
-            raise RuntimeError("All Gemini models quota-exhausted and no MISTRAL_API_KEY set")
-        logger.warning("All Gemini models exhausted — falling back to Mistral")
-
-    # Mistral path (primary if no Gemini key, fallback if Gemini exhausted)
     from mistralai.client import Mistral
     if not settings.mistral_api_key:
-        raise RuntimeError("No LLM key set — add GEMINI_API_KEY or MISTRAL_API_KEY to .env")
+        raise RuntimeError("No LLM key set — add MISTRAL_API_KEY to .env")
     client = Mistral(api_key=settings.mistral_api_key)
     resp = client.chat.complete(model="mistral-small-latest", messages=messages)
     logger.info("LLM: Mistral/mistral-small-latest")
