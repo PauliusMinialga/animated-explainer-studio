@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Check, ChevronDown, Crown, Download, Loader2, Play, X } from "lucide-react";
+import { Check, Crown, Download, Loader2, X } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import AlgorithmBrowser, { type AlgorithmItem } from "@/components/AlgorithmBrowser";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -14,25 +13,6 @@ const avatars = [
 
 const moods = ["Friendly", "Technical", "Energetic", "Calm"];
 const levels = ["Beginner", "Advanced", "Expert"];
-
-const premadeConcepts = [
-  { id: "recursion", label: "Recursion", file: "/demo/recursion.mp4" },
-  { id: "binary_search", label: "Binary Search", file: "/demo/binary_search.mp4" },
-  { id: "tcp_handshake", label: "TCP Handshake", file: "/demo/tcp_handshake.mp4" },
-  { id: "gradient_descent", label: "Gradient Descent", file: "/demo/gradient_descent.mp4" },
-];
-
-const premadeCode = [
-  { id: "explain_factorial", label: "Factorial", file: "/demo/explain_factorial.mp4" },
-  { id: "explain_dijkstra", label: "Dijkstra", file: "/demo/explain_dijkstra.mp4" },
-];
-
-const FAKE_STEPS = [
-  "Generating scripts…",
-  "Rendering animation…",
-  "Adding voiceover…",
-  "Finalising video…",
-];
 
 // Real pipeline statuses → step index + label
 const STATUS_STEPS = [
@@ -47,7 +27,7 @@ const POLL_INTERVAL = 3000;
 const POLL_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 const Premium = () => {
-  const { user, loading, isPremium, profileLoading, refreshProfile } = useAuth();
+  const { user, loading, isPremium, profileLoading } = useAuth();
 
   // Premium controls
   const [selectedAvatar, setSelectedAvatar] = useState("c3po");
@@ -56,11 +36,6 @@ const Premium = () => {
   const [level, setLevel] = useState("Beginner");
   const [prompt, setPrompt] = useState("");
   const [url, setUrl] = useState("");
-
-  const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
-  const [selectedPremadeFile, setSelectedPremadeFile] = useState<string | null>(null);
-  const [browserOpen, setBrowserOpen] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
 
   // Generation state
   const [generating, setGenerating] = useState(false);
