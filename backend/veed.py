@@ -40,15 +40,10 @@ class RequestResponse:
     outro: Video
 
 
-class Intonation(Enum):
-    SERIOUS = 1
-    HAPPY = 2
-
-
-@dataclass
-class Preferences:
-    avatar: Path
-    intonation: Intonation
+class Avatar(Enum):
+    SUPER_MAN = 1
+    WONDER_WOMAN = 2
+    C3PO = 3
 
 
 def veed_request(audio_url: str, image_url: str):
@@ -62,11 +57,23 @@ def veed_request(audio_url: str, image_url: str):
     )
 
 
+def avatar_to_image_path(avatar: Avatar) -> Path:
+    match avatar:
+        case Avatar.SUPER_MAN:
+            return Path("media/super_man.jpg")
+        case Avatar.WONDER_WOMAN:
+            return Path("media/wonder_woman.jpg")
+        case Avatar.C3PO:
+            return Path("media/c3po.jpg")
+
+
 def veed_request_with_files(
-    path_to_audio_file: Path, path_to_image_file: Path
+    path_to_audio_file: Path,
+    avatar: Avatar,
 ) -> Video:
     audio_url = fal_client.upload_file(path_to_audio_file)
-    image_url = fal_client.upload_file(path_to_image_file)
+    path_to_avatar_file = avatar_to_image_path(avatar)
+    image_url = fal_client.upload_file(path_to_avatar_file)
     req = veed_request(audio_url, image_url)
     return request_to_link_and_format(req)
 
@@ -121,9 +128,7 @@ def request_to_link_and_format(request) -> Video:
     return Video(url=video["url"], format=video["content_type"])
 
 
-def create_veed_from_script(
-    script: TTSScript, preferences: Preferences
-) -> RequestResponse:
+def create_veed_from_script(script: TTSScript, avatar: Avatar) -> RequestResponse:
     os.mkdir(TEMP_FOLDER)
     intro_audio_file = text_to_speech_file(
         script.intro, f"{TEMP_FOLDER}/intro_{script.id}"
@@ -134,8 +139,8 @@ def create_veed_from_script(
     info_audio_file = text_to_speech_file(
         script.info, f"{TEMP_FOLDER}/info_{script.id}"
     )
-    intro_video = veed_request_with_files(intro_audio_file, preferences.avatar)
-    outro_video = veed_request_with_files(outro_audio_file, preferences.avatar)
+    intro_video = veed_request_with_files(intro_audio_file, avatar)
+    outro_video = veed_request_with_files(outro_audio_file, avatar)
     return RequestResponse(intro=intro_video, info=info_audio_file, outro=outro_video)
 
 
@@ -148,9 +153,6 @@ if __name__ == "__main__":
             outro="That was it, have a great day and I hope to see you again soon.",
             id=random.randint(0, 1_000_000_000),
         ),
-        preferences=Preferences(
-            avatar=Path(IMAGE_PATH),
-            intonation=Intonation.HAPPY,
-        ),
+        avatar=Avatar.SUPER_MAN,
     )
     print(response)
