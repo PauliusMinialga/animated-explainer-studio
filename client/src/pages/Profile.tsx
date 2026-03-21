@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { Play, Crown, Sparkles, ArrowRight } from "lucide-react";
+import { Play, Crown, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const demoVideos = [
   { title: "Recursion Explained", duration: "2:34", color: "from-accent/20 to-accent/5" },
