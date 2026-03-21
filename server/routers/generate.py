@@ -17,7 +17,7 @@ import shutil
 import uuid
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from models import GenerateRequest, JobResponse, JobStatus, TTSScriptResponse
 from pipeline.enrich import enrich_prompt, ingest_github_repo
@@ -40,8 +40,9 @@ def _set(job_id: str, **kwargs):
 
 
 @router.post("/generate", response_model=JobResponse, status_code=202)
-async def generate(req: GenerateRequest, background_tasks: BackgroundTasks):
+async def generate(req: GenerateRequest, background_tasks: BackgroundTasks, request: Request):
     job_id = str(uuid.uuid4())
+    base_url = str(request.base_url).rstrip("/")
     _jobs[job_id] = {
         "status": JobStatus.pending,
         "progress": "Queued",
@@ -50,7 +51,7 @@ async def generate(req: GenerateRequest, background_tasks: BackgroundTasks):
         "tts_script": None,
         "error": None,
     }
-    background_tasks.add_task(_run_pipeline, job_id, req)
+    background_tasks.add_task(_run_pipeline, job_id, req, base_url)
     return JobResponse(job_id=job_id, status=JobStatus.pending, progress="Queued")
 
 
@@ -62,7 +63,7 @@ async def get_job(job_id: str):
     return JobResponse(job_id=job_id, **job)
 
 
-async def _run_pipeline(job_id: str, req: GenerateRequest):
+async def _run_pipeline(job_id: str, req: GenerateRequest, base_url: str = "http://localhost:8000"):
     try:
         out_dir = job_dir(job_id)
         is_github_url = req.prompt.strip().startswith("https://github.com/")
@@ -138,7 +139,7 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
         _set(
             job_id,
             progress="Generating avatar & voice…",
-            animation_url=f"/files/{job_id}/animation.mp4",
+            animation_url=f"{base_url}/files/{job_id}/animation.mp4",
             tts_script=tts_response,
         )
 
@@ -162,7 +163,7 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
                 outro_path=veed.outro_video,
                 out_path=final_path,
             )
-            _set(job_id, final_url=f"/files/{job_id}/final.mp4")
+            _set(job_id, final_url=f"{base_url}/files/{job_id}/final.mp4")
 
         _set(job_id, status=JobStatus.done, progress="Done")
 
