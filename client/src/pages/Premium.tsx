@@ -98,15 +98,21 @@ const Premium = () => {
 
 
   const handlePremiumGenerate = async () => {
-    if (!prompt.trim() || generating) return;
+    const isPromptMode = mode === "concept";
+    if (isPromptMode ? !prompt.trim() : !url.trim()) return;
+    if (generating) return;
+
+    const requestBody = isPromptMode
+      ? prompt.trim()
+      : url.trim();
 
     const payload = {
-      prompt: prompt.trim(),
-      url: url.trim() || null,
-      mode,
+      topic: requestBody,
+      mode: isPromptMode ? "prompt" : "repo",
       avatar: selectedAvatar,
       mood: mood.toLowerCase(),
       level: level.toLowerCase(),
+      github_url: (isPromptMode ? url.trim() : url.trim()) || null,
       user_id: user?.id,
     };
 
@@ -121,10 +127,12 @@ const Premium = () => {
       // Store the request in Supabase so the team can pick it up
       const { error } = await supabase.from("video_requests").insert({
         user_id: user!.id,
-        topic: prompt.trim(),
+        topic: requestBody,
+        mode: isPromptMode ? "prompt" : "repo",
         mood: mood.toLowerCase(),
         level: level.toLowerCase(),
         avatar: selectedAvatar,
+        github_url: (isPromptMode ? url.trim() : url.trim()) || null,
         status: "pending",
       });
 
