@@ -2,7 +2,7 @@
   "name": "codeviz",
   "private": true,
   "scripts": {
-    "dev": "cd client && npm install --legacy-peer-deps && npx vite",
+    "dev": "cd client && [ -d node_modules ] || npm install --legacy-peer-deps && npx vite",
     "build": "cd client && npm install --legacy-peer-deps && npx vite build",
     "preview": "cd client && npx vite preview"
   }
