@@ -7,9 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 const avatars = [
-  { id: "ava1", name: "Nova", emoji: "🤖" },
-  { id: "ava2", name: "Sage", emoji: "🧑‍🏫" },
-  { id: "ava3", name: "Pixel", emoji: "👾" },
+  { id: "c3po", name: "C-3PO", image: "/c3po.jpg" },
+  { id: "super_man", name: "Super Man", image: "/super_man.jpg" },
+  { id: "wonder_woman", name: "Wonder Woman", image: "/wonder_woman.jpg" },
 ];
 
 const moods = ["Friendly", "Technical", "Energetic", "Calm"];
@@ -50,7 +50,7 @@ const Premium = () => {
   const { user, loading, isPremium, profileLoading, refreshProfile } = useAuth();
 
   // Premium controls
-  const [selectedAvatar, setSelectedAvatar] = useState("ava1");
+  const [selectedAvatar, setSelectedAvatar] = useState("c3po");
   const [mode, setMode] = useState<"concept" | "code">("concept");
   const [mood, setMood] = useState("Friendly");
   const [level, setLevel] = useState("Beginner");
@@ -474,7 +474,7 @@ const Premium = () => {
                     <Check className="h-3 w-3 text-accent-foreground" />
                   </div>
                 )}
-                <span className="text-3xl">{a.emoji}</span>
+                <img src={a.image} alt={a.name} className="h-16 w-16 rounded-full object-cover" />
                 <span className="text-xs font-medium">{a.name}</span>
               </button>
             ))}
