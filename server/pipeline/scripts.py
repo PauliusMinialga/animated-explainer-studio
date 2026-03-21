@@ -148,12 +148,23 @@ Create a mind map animation. Layout rules:
 - Import only: `from manim import *`
 - Do NOT use MathTex, Tex, Code(), BulletedList(), or any LaTeX
 - Use Text() for all labels (font_size 20–28)
-- Rectangle nodes: width=2.2, height=0.9, use color=BLUE or WHITE etc.
+- Rectangle nodes: width=2.2, height=0.9, use fill_opacity=0.8
 - NEVER use .arrange() for the mind map nodes — position each one with .move_to()
 - SurroundingRectangle only accepts a single Mobject — wrap slices with VGroup(*...)
 - Target 25–35 seconds total runtime
+
+CRITICAL — ARROW ANIMATIONS (read carefully):
+- Arrow and CurvedArrow are MOBJECTS (shapes). Create them as variables first:
+    arrow = Arrow(start=..., end=..., buff=0.2)
+    curved = CurvedArrow(start_point=..., end_point=..., angle=PI/4)
+- To animate an arrow appearing, use GrowArrow inside self.play():
+    self.play(GrowArrow(arrow))       ← CORRECT
+- NEVER wrap GrowArrow inside Create():
+    self.play(Create(GrowArrow(...))) ← WILL CRASH — GrowArrow is already an animation
+    self.play(Create(arrow))          ← WILL CRASH — Arrow is not a VMobject
+- CurvedArrow: use self.play(Create(curved)) — CurvedArrow IS a VMobject
 - Allowed objects: Text, VGroup, Arrow, CurvedArrow, Rectangle, Circle, Line,
-  Dot, FadeIn, FadeOut, Create, Write, GrowArrow
+  Dot, FadeIn, FadeOut, Write, GrowArrow, Create (only for VMobjects like Rectangle/Text/CurvedArrow)
 
 ─── OUTPUT FORMAT (return EXACTLY this, no extra text) ───────────────────────
 
