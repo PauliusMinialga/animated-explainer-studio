@@ -1,6 +1,7 @@
 import { Link, Navigate } from "react-router-dom";
-import { Play, Lock, Crown } from "lucide-react";
+import { Play, Crown } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import PremiumGate from "@/components/PremiumGate";
 
 const demoVideos = [
   { title: "Recursion Explained", duration: "2:34", color: "from-accent/20 to-accent/5" },
@@ -17,7 +18,7 @@ const premiumFeatures = [
 ];
 
 const Profile = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, isPremium, tier, profile, profileLoading } = useAuth();
 
   if (loading) {
     return (
@@ -32,12 +33,13 @@ const Profile = () => {
   }
 
   const displayName =
+    profile?.full_name ||
     user.user_metadata?.full_name ||
     user.user_metadata?.name ||
     user.email?.split("@")[0] ||
     "User";
   const email = user.email || "";
-  const avatarUrl = user.user_metadata?.avatar_url;
+  const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url;
   const initials = displayName
     .split(" ")
     .map((w: string) => w[0])
@@ -63,11 +65,21 @@ const Profile = () => {
           )}
           <div>
             <h1 className="font-display text-2xl font-bold">{displayName}</h1>
-            <p className="text-sm text-muted-foreground">{email} · Free Plan</p>
+            <p className="text-sm text-muted-foreground">
+              {email} ·{" "}
+              {isPremium ? (
+                <span className="inline-flex items-center gap-1 text-accent">
+                  <Crown className="h-3.5 w-3.5" /> Premium
+                </span>
+              ) : (
+                "Free Plan"
+              )}
+              {profileLoading && " (loading…)"}
+            </p>
           </div>
         </div>
 
-        {/* Example Videos */}
+        {/* Demo Videos — visible to all */}
         <section className="mt-12">
           <h2 className="font-display text-xl font-semibold">Example Videos</h2>
           <p className="mt-1 text-sm text-muted-foreground">Watch pre-rendered demo explanations</p>
@@ -86,27 +98,35 @@ const Profile = () => {
           </div>
         </section>
 
-        {/* Locked Premium Section */}
-        <section className="mt-16">
-          <div className="relative overflow-hidden rounded-2xl border bg-card p-8">
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/80 backdrop-blur-[2px]">
-              <Lock className="h-8 w-8 text-muted-foreground" />
-              <h3 className="mt-3 font-display text-lg font-semibold">Premium Features</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Unlock the full power of CodeViz</p>
-              <Link
-                to="/premium"
-                className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
-              >
-                <Crown className="h-4 w-4" /> Upgrade to Premium
-              </Link>
-            </div>
-            <div className="grid gap-4 opacity-40 sm:grid-cols-2">
-              {premiumFeatures.map((f) => (
-                <div key={f} className="rounded-xl border bg-secondary p-4 text-sm font-medium">{f}</div>
-              ))}
-            </div>
+        {/* Generation History — premium only */}
+        <section className="mt-12">
+          <h2 className="font-display text-xl font-semibold">Generation History</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Your previously generated videos</p>
+          <div className="mt-6">
+            <PremiumGate inline message="Generation history is a Premium feature">
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No generated videos yet. Head to the{" "}
+                <Link to="/premium" className="font-medium text-accent hover:underline">
+                  generation page
+                </Link>{" "}
+                to create your first video.
+              </p>
+            </PremiumGate>
           </div>
         </section>
+
+        {/* Premium Features Upsell — only for free users */}
+        {!isPremium && (
+          <section className="mt-16">
+            <PremiumGate message="Unlock the full power of CodeViz">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {premiumFeatures.map((f) => (
+                  <div key={f} className="rounded-xl border bg-secondary p-4 text-sm font-medium">{f}</div>
+                ))}
+              </div>
+            </PremiumGate>
+          </section>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Download, Loader2 } from "lucide-react";
+import { Check, Download, Loader2, Lock } from "lucide-react";
+import { Navigate, Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import PremiumGate from "@/components/PremiumGate";
 
 const BACKEND = "http://localhost:8000";
 
@@ -32,6 +35,7 @@ type Job = {
 };
 
 const Premium = () => {
+  const { user, loading, isPremium, profileLoading } = useAuth();
   const [selectedAvatar, setSelectedAvatar] = useState("ava1");
   const [mode, setMode] = useState<"concept" | "code">("code");
   const [mood, setMood] = useState("Friendly");
@@ -44,7 +48,6 @@ const Premium = () => {
   const animRef = useRef<HTMLVideoElement>(null);
   const avatarRef = useRef<HTMLVideoElement>(null);
 
-  // Map fake step labels to real progress strings from backend
   const stepForProgress = (progress: string | null) => {
     if (!progress) return -1;
     const p = progress.toLowerCase();
@@ -62,7 +65,7 @@ const Premium = () => {
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || !isPremium) return;
     setJob(null);
     setActiveStep(0);
 
@@ -99,13 +102,54 @@ const Premium = () => {
     }, 2500);
   };
 
-  // Sync both videos to play together
   const handlePlay = () => {
     animRef.current?.play();
     avatarRef.current?.play();
   };
 
   useEffect(() => () => stopPolling(), []);
+
+  if (loading || profileLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Free user — show full-page upgrade prompt
+  if (!isPremium) {
+    return (
+      <div className="px-6 py-12">
+        <div className="mx-auto max-w-2xl text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-accent/10">
+            <Lock className="h-10 w-10 text-accent" />
+          </div>
+          <h1 className="mt-6 font-display text-3xl font-bold">Premium Access Required</h1>
+          <p className="mt-3 text-muted-foreground">
+            Video generation, avatar selection, mood & level settings, and generation history
+            are available exclusively for Premium users.
+          </p>
+          <div className="mt-8 flex items-center justify-center gap-4">
+            <Link
+              to="/profile"
+              className="inline-flex h-11 items-center rounded-xl border px-6 text-sm font-semibold transition-colors hover:bg-secondary"
+            >
+              Back to Profile
+            </Link>
+            {/* TODO: Link to actual upgrade/payment flow */}
+            <button className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-colors hover:bg-accent/90">
+              Upgrade to Premium
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isRunning = job?.status === "pending" || job?.status === "running";
   const isDone = job?.status === "done";
@@ -222,7 +266,6 @@ const Premium = () => {
             {isRunning ? "Generating…" : "Generate Video"}
           </button>
 
-          {/* Progress */}
           {(isRunning || isDone || isFailed) && (
             <div className="mt-6 space-y-3 rounded-xl border bg-card p-6">
               {STEPS.map((label, i) => {
@@ -249,27 +292,11 @@ const Premium = () => {
             </div>
           )}
 
-          {/* Dual Video Player */}
           {isDone && job?.animation_url && job?.avatar_url && (
             <div className="mt-6 overflow-hidden rounded-2xl border bg-black">
               <div className="relative aspect-video cursor-pointer" onClick={handlePlay}>
-                {/* Main animation */}
-                <video
-                  ref={animRef}
-                  src={`${BACKEND}${job.animation_url}`}
-                  className="h-full w-full object-contain"
-                  controls={false}
-                  playsInline
-                />
-                {/* Avatar overlay — bottom-right */}
-                <video
-                  ref={avatarRef}
-                  src={`${BACKEND}${job.avatar_url}`}
-                  className="absolute bottom-4 right-4 w-1/4 rounded-xl shadow-xl"
-                  controls={false}
-                  playsInline
-                />
-                {/* Play hint */}
+                <video ref={animRef} src={`${BACKEND}${job.animation_url}`} className="h-full w-full object-contain" controls={false} playsInline />
+                <video ref={avatarRef} src={`${BACKEND}${job.avatar_url}`} className="absolute bottom-4 right-4 w-1/4 rounded-xl shadow-xl" controls={false} playsInline />
                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity hover:opacity-0">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-lg">
                     <span className="ml-1 text-2xl">▶</span>
