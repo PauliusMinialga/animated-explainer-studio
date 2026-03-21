@@ -7,9 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 const avatars = [
-  { id: "c3po", name: "C-3PO", image: "/c3po.jpg" },
-  { id: "super_man", name: "Super Man", image: "/super_man.jpg" },
-  { id: "wonder_woman", name: "Wonder Woman", image: "/wonder_woman.jpg" },
+  { id: "c3po", name: "C-3PO", image: "/c3po.jpg", position: "center" },
+  { id: "super_man", name: "Super Man", image: "/super_man.jpg", position: "top" },
+  { id: "wonder_woman", name: "Wonder Woman", image: "/wonder_woman.jpg", position: "top" },
 ];
 
 const moods = ["Friendly", "Technical", "Energetic", "Calm"];
@@ -474,7 +474,7 @@ const Premium = () => {
                     <Check className="h-3 w-3 text-accent-foreground" />
                   </div>
                 )}
-                <img src={a.image} alt={a.name} className="h-16 w-16 rounded-full object-cover" />
+                <img src={a.image} alt={a.name} className="h-16 w-16 rounded-full object-cover" style={{ objectPosition: a.position }} />
                 <span className="text-xs font-medium">{a.name}</span>
               </button>
             ))}
