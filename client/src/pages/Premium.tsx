@@ -248,7 +248,28 @@ const Premium = () => {
             ))}
           </div>
 
-          {/* Generate button */}
+          {/* Selected from browser (if not in default list) */}
+          {selectedPremade && !activePremadeList.find((i) => i.id === selectedPremade) && (
+            <div className="mt-3 flex items-center gap-3 rounded-2xl border-2 border-accent bg-accent/10 p-4 shadow-md shadow-accent/10">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                <Play className="h-4 w-4" />
+              </div>
+              <span className="text-sm font-semibold">{selectedPremade.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+              <Check className="ml-auto h-5 w-5 text-accent" />
+            </div>
+          )}
+
+          {/* See more button */}
+          <button
+            onClick={() => setBrowserOpen(true)}
+            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent/80"
+          >
+            See more <ChevronDown className="h-4 w-4" />
+          </button>
+
+          {/* Algorithm browser dialog */}
+          <AlgorithmBrowser open={browserOpen} onClose={() => setBrowserOpen(false)} onSelect={handleBrowserSelect} />
+
           <div className="mt-8">
             <button
               onClick={handleFreeGenerate}
