@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
 import Premium from "./pages/Premium";
+import RepoExplainer from "./pages/RepoExplainer";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
               <Route path="/signup" element={<Signup />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/premium" element={<Premium />} />
+              <Route path="/repo/:jobId" element={<RepoExplainer />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

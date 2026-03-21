@@ -1,5 +1,5 @@
 """
-Mistral script generation.
+Mistral script generation for code/concept explanations.
 
 Given a prompt, returns:
 - A Manim animation script (scene class `GeneratedScene`)
@@ -7,14 +7,15 @@ Given a prompt, returns:
 
 The intro and outro are spoken by the avatar (on-screen talking head).
 The info part is the voiceover narrated during the Manim animation.
+
+NOTE: Repo explanation now uses the separate repo_analysis/repo_storyboard pipeline.
+This module only handles code snippet / concept explanations.
 """
 
-import json
 import logging
 import re
 from dataclasses import dataclass
 from config import settings
-from .graph_renderer import render_phase_to_manim
 
 logger = logging.getLogger(__name__)
 
@@ -139,163 +140,6 @@ def _parse(content: str) -> dict:
             outro=outro.group(1).strip(),
         ),
     }
-
-
-_REPO_GRAPH_PROMPT = """\
-You are analyzing a GitHub repository to produce a mind-map animation graph.
-The target audience is a {level} developer. Tone: {mood}.
-
-{repo_summary}
-
-Identify 5–8 key components (modules, directories, services, key files) and \
-the data/call-flow edges between them.
-
-Return ONLY a valid JSON object — no markdown fences, no explanation:
-{{
-  "nodes": [
-    {{"id": "snake_case_id", "label": "Short Label"}}
-  ],
-  "edges": [
-    {{"from": "node_id", "to": "node_id"}}
-  ],
-  "tts": {{
-    "intro": "1 sentence: what this repo does",
-    "info": "5-8 sentences narrated DURING the animation. Describe each component and the flow between them in plain language, suitable for a beginner.",
-    "outro": "1 sentence: key architectural pattern or takeaway"
-  }}
-}}
-
-Rules:
-- Do NOT include the repository itself as a node (it will be the central node automatically)
-- 5–8 nodes total
-- Edges show data/call flow, not directory nesting
-- Labels: max 15 chars, no line breaks
-- Return ONLY the raw JSON object, nothing else
-"""
-
-_PHASE_SPLITTER_PROMPT = """\
-You are given a component graph for a software repository.
-Split the nodes and edges into 2–4 logical animation phases.
-
-Each phase focuses on one concern or layer (e.g. "Core", "Data Layer", "User Interaction").
-The central repo node "{repo_name}" appears in ALL phases as the anchor.
-
-Rules:
-- 2–4 phases total, prefer 3
-- Every non-central node must appear in exactly ONE phase
-- A phase edge is only valid if BOTH its endpoints appear in that phase (or are the central node)
-- Each phase title is 2–3 words
-- Do not include edges that cross phases
-
-Input graph:
-{graph_json}
-
-Return ONLY valid JSON — no markdown, no explanation:
-{{
-  "phases": [
-    {{
-      "title": "Phase title",
-      "node_ids": ["id1", "id2"],
-      "edges": [{{"from": "id1", "to": "id2"}}]
-    }}
-  ]
-}}
-"""
-
-
-def _strip_json(raw: str) -> str:
-    raw = re.sub(r"^```[a-z]*\n?", "", raw)
-    return re.sub(r"\n?```$", "", raw.strip())
-
-
-def generate_repo_scripts(
-    url: str,
-    repo_content: str,
-    mood: str = "friendly",
-    level: str = "beginner",
-) -> tuple[list[str], TTSScript]:
-    """
-    Two-step LLM pipeline:
-      1. Get the full component graph (nodes, edges, tts)
-      2. Split the graph into logical phases
-
-    Returns (manim_scripts: list[str], tts: TTSScript) — one script per phase.
-    """
-    m = re.search(r"github\.com/[^/]+/([^/\s]+)", url)
-    repo_name = m.group(1) if m else url.rstrip("/").split("/")[-1]
-
-    # ── Step 1: full graph ────────────────────────────────────────────────────
-    logger.info("[repo-scripts] Step 1: generating component graph")
-    raw_graph = _chat(
-        system="You are a technical analyst. Return only valid JSON, no markdown.",
-        user=_REPO_GRAPH_PROMPT.format(repo_summary=repo_content, mood=mood, level=level),
-        temperature=0.3,
-    )
-    try:
-        data = json.loads(_strip_json(raw_graph))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Step 1 LLM returned invalid JSON: {exc}\n\n{raw_graph[:400]}") from exc
-
-    nodes: list[dict] = data.get("nodes", [])
-    edges: list[dict] = data.get("edges", [])
-    tts_data: dict = data.get("tts", {})
-    tts = TTSScript(
-        intro=tts_data.get("intro", ""),
-        info=tts_data.get("info", ""),
-        outro=tts_data.get("outro", ""),
-    )
-
-    # ── Step 2: phase splitter ────────────────────────────────────────────────
-    logger.info("[repo-scripts] Step 2: splitting into phases")
-    raw_phases = _chat(
-        system="You are a technical animator. Return only valid JSON, no markdown.",
-        user=_PHASE_SPLITTER_PROMPT.format(
-            repo_name=repo_name,
-            graph_json=json.dumps({"nodes": nodes, "edges": edges}, indent=2),
-        ),
-        temperature=0.2,
-    )
-    try:
-        phases_data: list[dict] = json.loads(_strip_json(raw_phases)).get("phases", [])
-    except json.JSONDecodeError as exc:
-        logger.warning("Phase splitter returned invalid JSON, falling back to single phase: %s", exc)
-        phases_data = [{"title": repo_name, "node_ids": [n["id"] for n in nodes], "edges": edges}]
-
-    if not phases_data:
-        phases_data = [{"title": repo_name, "node_ids": [n["id"] for n in nodes], "edges": edges}]
-
-    # ── Build per-phase Manim scripts ─────────────────────────────────────────
-    node_map = {n["id"]: n for n in nodes}
-    total_phases = len(phases_data)
-    # Spread TTS timing evenly across phases
-    words_per_phase = max(10, len(tts.info.split()) // total_phases)
-    phase_narration = " ".join(tts.info.split()[:words_per_phase * 2])  # rough estimate
-
-    manim_scripts = []
-    for i, phase in enumerate(phases_data):
-        phase_node_ids: list[str] = phase.get("node_ids", [])
-        phase_nodes = [node_map[nid] for nid in phase_node_ids if nid in node_map]
-        valid_ids = set(phase_node_ids) | {"center"}
-        phase_edges = [
-            e for e in phase.get("edges", [])
-            if e.get("from") in valid_ids and e.get("to") in valid_ids
-        ]
-        script = render_phase_to_manim(
-            repo_name=repo_name,
-            phase_num=i + 1,
-            total_phases=total_phases,
-            phase_title=phase.get("title", f"Part {i + 1}"),
-            nodes=phase_nodes,
-            edges=phase_edges,
-            tts_info=phase_narration,
-        )
-        manim_scripts.append(script)
-        logger.info(
-            "[repo-scripts] Phase %d/%d — '%s' — %d nodes, %d edges",
-            i + 1, total_phases, phase.get("title"), len(phase_nodes), len(phase_edges),
-        )
-
-    return manim_scripts, tts
 
 
 def generate_scripts(

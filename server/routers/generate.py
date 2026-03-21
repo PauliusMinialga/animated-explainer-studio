@@ -2,12 +2,11 @@
 Generate endpoint with async job tracking.
 
 POST /generate   → starts background pipeline, returns job_id immediately
-GET  /jobs/{id}  → poll for status, progress, animation_url, final_url, tts_script
+GET  /jobs/{id}  → poll for status, progress, results
 
 Pipeline:
-  - If prompt is a github.com URL → ingest repo via gitingest.com → generate_repo_scripts
-  - Otherwise → generate_scripts (concept / code mode)
-  Both paths: Manim render → Bote's VEED pipeline → final merge → done.
+  - If prompt is a github.com URL → repo analysis → storyboard → narration (React Flow)
+  - Otherwise → generate_scripts → Manim render → VEED → final merge (video)
 """
 
 import asyncio
@@ -22,12 +21,15 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
-from models import GenerateRequest, JobResponse, JobStatus, TTSScriptResponse
+from models import GenerateRequest, JobResponse, JobStatus, JobType, TTSScriptResponse
 from pipeline.enrich import enrich_prompt, ingest_github_repo
-from pipeline.scripts import generate_scripts, generate_repo_scripts
+from pipeline.scripts import generate_scripts
 from pipeline.manim_render import render_manim
 from pipeline.veed_pipeline import run_veed_pipeline
 from pipeline.final_merge import merge_final
+from pipeline.repo_analysis import analyze_repo
+from pipeline.repo_storyboard import generate_storyboard
+from pipeline.repo_narration import assemble_narration, narration_to_tts_info
 from database import job_dir
 from config import settings
 
@@ -42,60 +44,24 @@ def _set(job_id: str, **kwargs):
     _jobs[job_id].update(kwargs)
 
 
-def _concat_phases(phase_paths: list[Path], out_path: Path) -> None:
-    """ffmpeg concat multiple phase mp4s into one animation.mp4."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-        for p in phase_paths:
-            f.write(f"file '{p}'\n")
-        concat_list = f.name
-    try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                concat_list,
-                "-c",
-                "copy",
-                str(out_path),
-            ],
-            check=True,
-            capture_output=True,
-        )
-    finally:
-        Path(concat_list).unlink(missing_ok=True)
-
-
 @router.post("/generate", response_model=JobResponse, status_code=202)
-async def generate(
-    req: GenerateRequest, background_tasks: BackgroundTasks, request: Request
-):
-    # Added prints for debugging as requested
-    print(
-        f"\n🚀 [generate] RECEIVED REQUEST: {req.model_dump_json(indent=2) if hasattr(req, 'model_dump_json') else req}"
-    )
-    logger.info("[%s] Incoming generate request: %s", "NEW", req)
-
-    try:
-        job_id = str(uuid.uuid4())
-        base_url = str(request.base_url).rstrip("/")
-        _jobs[job_id] = {
-            "status": JobStatus.pending,
-            "progress": "Queued",
-            "animation_url": None,
-            "final_url": None,
-            "tts_script": None,
-            "error": None,
-        }
-        background_tasks.add_task(_run_pipeline, job_id, req, base_url)
-    except Exception as e:
-        print(f"❌ [generate] FAILED to initialize job: {e}")
-        logger.exception("Generate route error")
-        raise HTTPException(status_code=500, detail=str(e))
+async def generate(req: GenerateRequest, background_tasks: BackgroundTasks, request: Request):
+    job_id = str(uuid.uuid4())
+    base_url = str(request.base_url).rstrip("/")
+    _jobs[job_id] = {
+        "status": JobStatus.pending,
+        "progress": "Queued",
+        "job_type": None,
+        "animation_url": None,
+        "final_url": None,
+        "architecture": None,
+        "storyboard": None,
+        "narration": None,
+        "tts_script": None,
+        "error": None,
+    }
+    background_tasks.add_task(_run_pipeline, job_id, req, base_url)
+    return JobResponse(job_id=job_id, status=JobStatus.pending, progress="Queued")
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
@@ -106,132 +72,166 @@ async def get_job(job_id: str):
     return JobResponse(job_id=job_id, **job)
 
 
-async def _run_pipeline(
-    job_id: str, req: GenerateRequest, base_url: str = "http://localhost:8000"
-):
+async def _run_pipeline(job_id: str, req: GenerateRequest, base_url: str = "http://localhost:8000"):
     try:
         out_dir = job_dir(job_id)
         is_github_url = req.prompt.strip().startswith("https://github.com/")
 
         if is_github_url:
-            _set(job_id, status=JobStatus.running, progress="Ingesting GitHub repo…")
-            logger.info("[%s] Ingesting repo: %s", job_id, req.prompt.strip())
-            try:
-                repo_content = await ingest_github_repo(req.prompt.strip())
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc))
-            except httpx.HTTPStatusError as exc:
-                status = exc.response.status_code
-                raise HTTPException(
-                    status_code=status,
-                    detail=f"Could not fetch repo (HTTP {status}): {req.prompt}",
-                )
-            logger.info("[%s] Repo ingested — %d chars", job_id, len(repo_content))
-
-            _set(job_id, progress="Generating repo scripts…")
-            manim_scripts, tts = generate_repo_scripts(
-                url=req.prompt.strip(),
-                repo_content=repo_content,
-                mood=req.mood,
-                level=req.level,
-            )
+            await _run_repo_pipeline(job_id, req, out_dir, base_url)
         else:
-            _set(job_id, status=JobStatus.running, progress="Enriching prompt…")
-            enriched_prompt = await enrich_prompt(req.prompt, req.url)
-
-            _set(job_id, progress="Generating scripts…")
-            scripts = generate_scripts(
-                enriched_prompt,
-                mode=req.mode,
-                level=req.level,
-                mood=req.mood,
-            )
-            manim_scripts = [scripts["manim_script"]]
-            tts = scripts["tts_script"]
-
-        logger.info(
-            "[%s] ── TTS SCRIPT ───────────────────────────────────\n"
-            "  INTRO: %s\n  INFO:  %s\n  OUTRO: %s\n"
-            "─────────────────────────────────────────────────────",
-            job_id,
-            tts.intro,
-            tts.info,
-            tts.outro,
-        )
-
-        # Persist artefacts
-        (out_dir / "tts_script.json").write_text(
-            json.dumps(
-                {"intro": tts.intro, "info": tts.info, "outro": tts.outro}, indent=2
-            ),
-            encoding="utf-8",
-        )
-        for i, ms in enumerate(manim_scripts):
-            logger.info("[%s] ── PHASE %d SCRIPT ──\n%s\n──────────", job_id, i + 1, ms)
-            (out_dir / f"manim_phase_{i}.py").write_text(ms, encoding="utf-8")
-
-        # ── Render each phase ─────────────────────────────────────────────────
-        phase_paths: list[Path] = []
-        for i, script in enumerate(manim_scripts):
-            _set(job_id, progress=f"Rendering phase {i + 1}/{len(manim_scripts)}…")
-            p = await render_manim(
-                out_dir,
-                script_str=script,
-                scene_class="GeneratedScene",
-                output_name=f"phase_{i}",
-            )
-            phase_paths.append(p)
-
-        # ── Concat phases → animation.mp4 ─────────────────────────────────────
-        final_animation = out_dir / "animation.mp4"
-        if len(phase_paths) == 1:
-            shutil.copy2(phase_paths[0], final_animation)
-        else:
-            _set(job_id, progress="Concatenating phases…")
-            await asyncio.to_thread(_concat_phases, phase_paths, final_animation)
-
-        tts_response = TTSScriptResponse(
-            intro=tts.intro, info=tts.info, outro=tts.outro
-        )
-
-        # Mark animation ready — frontend can show it while VEED processes
-        _set(
-            job_id,
-            progress="Generating avatar & voice…",
-            animation_url=f"{base_url}/files/{job_id}/animation.mp4",
-            tts_script=tts_response,
-        )
-
-        # ── Bote's VEED pipeline ──────────────────────────────────────────────
-        # Skip if keys not configured (e.g. local dev without VEED creds)
-        if settings.runware_api_key and settings.fal_key:
-            veed = await run_veed_pipeline(
-                intro_text=tts.intro,
-                info_text=tts.info,
-                outro_text=tts.outro,
-                job_dir=out_dir,
-            )
-
-            _set(job_id, progress="Assembling final video…")
-            final_path = out_dir / "final.mp4"
-            await asyncio.to_thread(
-                merge_final,
-                intro_path=veed.intro_video,
-                animation_path=final_animation,
-                info_audio_path=veed.info_audio,
-                outro_path=veed.outro_video,
-                out_path=final_path,
-            )
-            _set(job_id, final_url=f"{base_url}/files/{job_id}/final.mp4")
-
-        _set(job_id, status=JobStatus.done, progress="Done")
+            await _run_code_pipeline(job_id, req, out_dir, base_url)
 
     except HTTPException as exc:
-        print(f"❌ [pipeline] HTTPException in job {job_id}: {exc.detail}")
         _set(job_id, status=JobStatus.failed, progress="Failed", error=exc.detail)
         raise
     except Exception as exc:
-        print(f"❌ [pipeline] UNEXPECTED ERROR in job {job_id}: {exc}")
-        logger.exception("[%s] Pipeline failed", job_id)
         _set(job_id, status=JobStatus.failed, progress="Failed", error=str(exc))
         raise
+
+
+# ── Repo pipeline (React Flow) ───────────────────────────────────────────────
+
+async def _run_repo_pipeline(
+    job_id: str, req: GenerateRequest, out_dir: Path, base_url: str,
+):
+    _set(job_id, status=JobStatus.running, job_type=JobType.repo, progress="Ingesting GitHub repo…")
+    logger.info("[%s] Ingesting repo: %s", job_id, req.prompt.strip())
+
+    try:
+        repo_content = await ingest_github_repo(req.prompt.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail=f"Could not fetch repo (HTTP {exc.response.status_code}): {req.prompt}",
+        )
+    logger.info("[%s] Repo ingested — %d chars", job_id, len(repo_content))
+
+    # Stage 1: Architecture
+    _set(job_id, progress="Analyzing architecture…")
+    architecture = await asyncio.to_thread(
+        analyze_repo, repo_content, req.mood, req.level,
+    )
+    arch_dict = architecture.model_dump(by_alias=True)
+    (out_dir / "architecture.json").write_text(json.dumps(arch_dict, indent=2))
+    _set(job_id, architecture=arch_dict)
+
+    # Stage 2: Storyboard
+    _set(job_id, progress="Generating storyboard…")
+    storyboard = await asyncio.to_thread(generate_storyboard, architecture)
+    sb_dict = storyboard.model_dump()
+    (out_dir / "storyboard.json").write_text(json.dumps(sb_dict, indent=2))
+    _set(job_id, storyboard=sb_dict)
+
+    # Stage 3: Narration
+    _set(job_id, progress="Assembling narration…")
+    narration = assemble_narration(storyboard, architecture.summary)
+    narr_dict = narration.model_dump()
+    (out_dir / "narration.json").write_text(json.dumps(narr_dict, indent=2))
+    _set(job_id, narration=narr_dict)
+
+    # Build TTS script for VEED
+    tts_info = narration_to_tts_info(narration)
+    tts_response = TTSScriptResponse(
+        intro=narration.intro,
+        info=tts_info,
+        outro=narration.outro,
+    )
+    _set(job_id, tts_script=tts_response)
+
+    logger.info(
+        "[%s] ── TTS SCRIPT ───\n  INTRO: %s\n  INFO:  %s\n  OUTRO: %s\n───────",
+        job_id, narration.intro, tts_info[:200], narration.outro,
+    )
+
+    # Optional: VEED avatar pipeline (intro/outro talking head)
+    if settings.runware_api_key and settings.fal_key:
+        _set(job_id, progress="Generating avatar & voice…")
+        try:
+            veed = await run_veed_pipeline(
+                intro_text=narration.intro,
+                info_text=tts_info,
+                outro_text=narration.outro,
+                job_dir=out_dir,
+            )
+            # Store avatar URLs for frontend to use alongside React Flow
+            _set(
+                job_id,
+                animation_url=f"{base_url}/files/{job_id}/intro.mp4",
+                final_url=f"{base_url}/files/{job_id}/outro.mp4",
+            )
+        except Exception as exc:
+            logger.warning("[%s] VEED pipeline failed (non-fatal): %s", job_id, exc)
+
+    _set(job_id, status=JobStatus.done, progress="Done")
+
+
+# ── Code pipeline (Manim) ────────────────────────────────────────────────────
+
+async def _run_code_pipeline(
+    job_id: str, req: GenerateRequest, out_dir: Path, base_url: str,
+):
+    _set(job_id, status=JobStatus.running, job_type=JobType.code, progress="Enriching prompt…")
+    enriched_prompt = await enrich_prompt(req.prompt, req.url)
+
+    _set(job_id, progress="Generating scripts…")
+    scripts = generate_scripts(
+        enriched_prompt,
+        mode=req.mode,
+        level=req.level,
+        mood=req.mood,
+    )
+    manim_script = scripts["manim_script"]
+    tts = scripts["tts_script"]
+
+    logger.info(
+        "[%s] ── TTS SCRIPT ───\n  INTRO: %s\n  INFO:  %s\n  OUTRO: %s\n───────",
+        job_id, tts.intro, tts.info, tts.outro,
+    )
+
+    (out_dir / "tts_script.json").write_text(
+        json.dumps({"intro": tts.intro, "info": tts.info, "outro": tts.outro}, indent=2),
+    )
+    (out_dir / "manim_script.py").write_text(manim_script)
+
+    # Render Manim
+    _set(job_id, progress="Rendering animation…")
+    animation_path = await render_manim(
+        out_dir, script_str=manim_script, scene_class="GeneratedScene",
+    )
+    final_animation = out_dir / "animation.mp4"
+    shutil.copy2(animation_path, final_animation)
+
+    tts_response = TTSScriptResponse(intro=tts.intro, info=tts.info, outro=tts.outro)
+    _set(
+        job_id,
+        progress="Generating avatar & voice…",
+        animation_url=f"{base_url}/files/{job_id}/animation.mp4",
+        tts_script=tts_response,
+    )
+
+    # VEED pipeline
+    if settings.runware_api_key and settings.fal_key:
+        veed = await run_veed_pipeline(
+            intro_text=tts.intro,
+            info_text=tts.info,
+            outro_text=tts.outro,
+            job_dir=out_dir,
+        )
+
+        _set(job_id, progress="Assembling final video…")
+        final_path = out_dir / "final.mp4"
+        await asyncio.to_thread(
+            merge_final,
+            intro_path=veed.intro_video,
+            animation_path=final_animation,
+            info_audio_path=veed.info_audio,
+            outro_path=veed.outro_video,
+            out_path=final_path,
+        )
+        _set(job_id, final_url=f"{base_url}/files/{job_id}/final.mp4")
+
+    _set(job_id, status=JobStatus.done, progress="Done")
+

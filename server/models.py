@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel
 
 
@@ -19,6 +19,11 @@ class Mood(str, Enum):
     technical = "technical"
     energetic = "energetic"
     calm = "calm"
+
+
+class JobType(str, Enum):
+    repo = "repo"
+    code = "code"
 
 
 class GenerateRequest(BaseModel):
@@ -47,7 +52,14 @@ class JobResponse(BaseModel):
     job_id: str
     status: JobStatus
     progress: Optional[str] = None
+    job_type: Optional[JobType] = None
+    # Code path (Manim)
     animation_url: Optional[str] = None
     final_url: Optional[str] = None
+    # Repo path (React Flow)
+    architecture: Optional[dict[str, Any]] = None
+    storyboard: Optional[dict[str, Any]] = None
+    narration: Optional[dict[str, Any]] = None
+    # Shared
     tts_script: Optional[TTSScriptResponse] = None
     error: Optional[str] = None
