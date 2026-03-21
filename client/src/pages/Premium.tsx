@@ -38,7 +38,7 @@ const FAKE_STEPS = [
 
 
 const Premium = () => {
-  const { user, loading, isPremium, profileLoading } = useAuth();
+  const { user, loading, isPremium, profileLoading, refreshProfile } = useAuth();
 
   // Premium controls
   const [selectedAvatar, setSelectedAvatar] = useState("ava1");
@@ -52,6 +52,7 @@ const Premium = () => {
   const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
   const [selectedPremadeFile, setSelectedPremadeFile] = useState<string | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   // Generation state
   const [generating, setGenerating] = useState(false);
@@ -94,6 +95,22 @@ const Premium = () => {
   const handleBrowserSelect = (item: AlgorithmItem) => {
     setSelectedPremade(item.id);
     setSelectedPremadeFile(item.file);
+  };
+
+  const handleUpgrade = async () => {
+    if (!user || upgrading) return;
+    setUpgrading(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ tier: "premium" })
+      .eq("user_id", user.id);
+    if (error) {
+      toast({ title: "Error", description: "Upgrade failed. Please try again.", variant: "destructive" });
+    } else {
+      await refreshProfile();
+      toast({ title: "🎉 Welcome to Premium!", description: "You now have full access to custom video generation." });
+    }
+    setUpgrading(false);
   };
 
 
@@ -342,12 +359,14 @@ const Premium = () => {
             <p className="mt-1 text-sm text-muted-foreground">
               Upgrade to Premium to write your own prompts, choose avatars, and customise mood & level.
             </p>
-            <a
-              href="/premium"
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
             >
-              <Crown className="h-4 w-4" /> Upgrade to Premium
-            </a>
+              {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+              {upgrading ? "Upgrading…" : "Upgrade to Premium"}
+            </button>
           </div>
         </div>
       </div>
