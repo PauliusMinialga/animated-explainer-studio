@@ -47,6 +47,13 @@ AVATAR_IMAGES: dict[str, str] = {
     "wonder_woman": "https://v3b.fal.media/files/b/0a931d8c/EnlJgbO2QVvUMcMBTqajh_wonder_woman.jpg",
 }
 
+# Avatar ID → Runware TTS voice — matched to persona
+AVATAR_VOICES: dict[str, str] = {
+    "c3po": "Rupert",        # formal British — robot protocol officer
+    "super_man": "Sebastian", # strong confident male — hero
+    "wonder_woman": "Victoria", # powerful regal female — warrior queen
+}
+
 
 def _set(job_id: str, **kwargs):
     _jobs[job_id].update(kwargs)
@@ -161,14 +168,15 @@ async def _run_repo_pipeline(
         _set(job_id, progress="Generating scene audio…")
         if rid:
             update_request_status(rid, "adding_voiceover")
-        logger.info("[%s] Generating per-scene TTS (%d scenes)", job_id, len(narration.scenes))
+        scene_voice = AVATAR_VOICES.get(req.avatar or "", "Oliver")
+        logger.info("[%s] Generating per-scene TTS (%d scenes) voice=%s", job_id, len(narration.scenes), scene_voice)
 
         # Generate all scene audio files in parallel
         scene_tts_tasks = []
         for i, sn in enumerate(narration.scenes):
             if sn.narration.strip():
                 out_path = out_dir / f"scene_{i}.mp3"
-                scene_tts_tasks.append((i, generate_tts_audio(sn.narration, out_path)))
+                scene_tts_tasks.append((i, generate_tts_audio(sn.narration, out_path, voice=scene_voice)))
 
         for i, task in scene_tts_tasks:
             try:
@@ -201,6 +209,7 @@ async def _run_repo_pipeline(
         if rid:
             update_request_status(rid, "finalizing")
         avatar_image_url = AVATAR_IMAGES.get(req.avatar or "", settings.avatar_image_url) or settings.avatar_image_url
+        avatar_voice = AVATAR_VOICES.get(req.avatar or "", "Oliver")
         try:
             veed = await run_veed_pipeline(
                 intro_text=narration.intro,
@@ -208,6 +217,7 @@ async def _run_repo_pipeline(
                 outro_text=narration.outro,
                 job_dir=out_dir,
                 avatar_image_url=avatar_image_url,
+                voice=avatar_voice,
             )
             # Inject video URLs into narration dict
             narr_dict["intro_video_url"] = f"{base_url}/files/{job_id}/intro.mp4"
@@ -271,12 +281,14 @@ async def _run_code_pipeline(
         if rid:
             update_request_status(rid, "adding_voiceover")
         avatar_image_url = AVATAR_IMAGES.get(req.avatar or "", settings.avatar_image_url) or settings.avatar_image_url
+        avatar_voice = AVATAR_VOICES.get(req.avatar or "", "Oliver")
         veed = await run_veed_pipeline(
             intro_text=tts.intro,
             info_text=tts.info,
             outro_text=tts.outro,
             job_dir=out_dir,
             avatar_image_url=avatar_image_url,
+            voice=avatar_voice,
         )
 
         _set(job_id, progress="Assembling final video…")

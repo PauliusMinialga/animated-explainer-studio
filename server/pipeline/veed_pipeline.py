@@ -32,7 +32,7 @@ class VeedResult:
     outro_video: Path
 
 
-async def _tts(text: str, out_path: Path) -> Path:
+async def _tts(text: str, out_path: Path, voice: str = "Oliver") -> Path:
     """Runware TTS → mp3 file."""
     runware = Runware(api_key=settings.runware_api_key)
     await runware.connect()
@@ -40,7 +40,7 @@ async def _tts(text: str, out_path: Path) -> Path:
         results = await runware.audioInference(
             requestAudio=IAudioInference(
                 model="inworld:tts@1.5-mini",
-                speech=IAudioSpeech(text=text, voice="Oliver"),
+                speech=IAudioSpeech(text=text, voice=voice),
             )
         )
         audio = results[0]
@@ -56,11 +56,11 @@ async def _tts(text: str, out_path: Path) -> Path:
     return out_path
 
 
-async def generate_tts_audio(text: str, out_path: Path) -> Path:
+async def generate_tts_audio(text: str, out_path: Path, voice: str = "Oliver") -> Path:
     """Public wrapper for TTS generation — used by repo pipeline for per-scene audio."""
     if not settings.runware_api_key:
         raise RuntimeError("RUNWARE_API_KEY is not set")
-    return await _tts(text, out_path)
+    return await _tts(text, out_path, voice=voice)
 
 
 async def _avatar_video(audio_path: Path, out_path: Path, image_url: Optional[str] = None) -> Path:
@@ -90,6 +90,7 @@ async def run_veed_pipeline(
     outro_text: str,
     job_dir: Path,
     avatar_image_url: Optional[str] = None,
+    voice: str = "Oliver",
 ) -> VeedResult:
     """
     Full Bote pipeline for one job.
@@ -104,11 +105,11 @@ async def run_veed_pipeline(
     info_mp3 = job_dir / "info.mp3"
     outro_mp3 = job_dir / "outro.mp3"
 
-    logger.info("Generating TTS audio (intro + info + outro)…")
+    logger.info("Generating TTS audio (intro + info + outro) voice=%s…", voice)
     await asyncio.gather(
-        _tts(intro_text, intro_mp3),
-        _tts(info_text, info_mp3),
-        _tts(outro_text, outro_mp3),
+        _tts(intro_text, intro_mp3, voice=voice),
+        _tts(info_text, info_mp3, voice=voice),
+        _tts(outro_text, outro_mp3, voice=voice),
     )
 
     logger.info("Generating avatar videos (intro + outro) — image: %s", avatar_image_url or "default")
