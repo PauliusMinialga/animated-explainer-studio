@@ -1,20 +1,22 @@
 /**
  * Custom React Flow node for architecture components.
- * Visual style varies by component type and highlight state.
+ * Uses inline styles (Tailwind can't detect dynamic class concatenation).
  */
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 
-const TYPE_COLORS: Record<string, { bg: string; border: string; icon: string }> = {
-  frontend: { bg: "bg-blue-900/80", border: "border-blue-400", icon: "🖥️" },
-  backend: { bg: "bg-emerald-900/80", border: "border-emerald-400", icon: "⚙️" },
-  database: { bg: "bg-amber-900/80", border: "border-amber-400", icon: "🗄️" },
-  service: { bg: "bg-purple-900/80", border: "border-purple-400", icon: "🔌" },
-  library: { bg: "bg-cyan-900/80", border: "border-cyan-400", icon: "📦" },
-  config: { bg: "bg-gray-800/80", border: "border-gray-400", icon: "⚙️" },
-  cli: { bg: "bg-orange-900/80", border: "border-orange-400", icon: "💻" },
-  module: { bg: "bg-indigo-900/80", border: "border-indigo-400", icon: "📁" },
+const TYPE_STYLES: Record<string, { bg: string; border: string; icon: string }> = {
+  frontend: { bg: "#1e3a5f", border: "#60a5fa", icon: "🖥️" },
+  backend:  { bg: "#064e3b", border: "#34d399", icon: "⚙️" },
+  database: { bg: "#78350f", border: "#fbbf24", icon: "🗄️" },
+  service:  { bg: "#4c1d95", border: "#a78bfa", icon: "🔌" },
+  library:  { bg: "#164e63", border: "#22d3ee", icon: "📦" },
+  config:   { bg: "#1f2937", border: "#9ca3af", icon: "⚙️" },
+  cli:      { bg: "#7c2d12", border: "#fb923c", icon: "💻" },
+  module:   { bg: "#312e81", border: "#818cf8", icon: "📁" },
 };
+
+const DEFAULT_STYLE = TYPE_STYLES.module;
 
 export interface ComponentNodeData {
   label: string;
@@ -25,26 +27,35 @@ export interface ComponentNodeData {
 }
 
 function ComponentNode({ data }: NodeProps<ComponentNodeData>) {
-  const colors = TYPE_COLORS[data.type] || TYPE_COLORS.module;
+  const style = TYPE_STYLES[data.type] || DEFAULT_STYLE;
 
   return (
     <div
-      className={`
-        rounded-xl border-2 px-4 py-3 shadow-lg backdrop-blur-sm
-        transition-all duration-500 ease-out min-w-[140px] max-w-[200px]
-        ${colors.bg} ${colors.border}
-        ${data.highlighted ? "ring-2 ring-white/60 scale-105 shadow-white/20" : ""}
-        ${data.dimmed ? "opacity-30 scale-95" : "opacity-100"}
-      `}
+      style={{
+        background: style.bg,
+        borderColor: style.border,
+        borderWidth: 2,
+        borderStyle: "solid",
+        borderRadius: 12,
+        padding: "10px 16px",
+        minWidth: 140,
+        maxWidth: 200,
+        opacity: data.dimmed ? 0.3 : 1,
+        transform: data.highlighted ? "scale(1.05)" : data.dimmed ? "scale(0.95)" : "scale(1)",
+        boxShadow: data.highlighted ? `0 0 16px ${style.border}60` : "0 4px 12px rgba(0,0,0,0.3)",
+        transition: "all 0.5s ease",
+      }}
     >
-      <Handle type="target" position={Position.Top} className="!bg-white/40 !w-2 !h-2" />
-      <Handle type="source" position={Position.Bottom} className="!bg-white/40 !w-2 !h-2" />
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-sm">{colors.icon}</span>
-        <span className="text-sm font-semibold text-white truncate">{data.label}</span>
+      <Handle type="target" position={Position.Top} style={{ background: "#ffffff66", width: 8, height: 8 }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: "#ffffff66", width: 8, height: 8 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 14 }}>{style.icon}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {data.label}
+        </span>
       </div>
       {data.responsibility && !data.dimmed && (
-        <p className="text-[10px] leading-tight text-white/60 line-clamp-2">
+        <p style={{ fontSize: 10, lineHeight: 1.3, color: "#ffffff99", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
           {data.responsibility}
         </p>
       )}
