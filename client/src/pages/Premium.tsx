@@ -46,6 +46,7 @@ const Premium = () => {
   const [mood, setMood] = useState("Friendly");
   const [level, setLevel] = useState("Beginner");
   const [prompt, setPrompt] = useState("");
+  const [codeSnippet, setCodeSnippet] = useState("");
   const [url, setUrl] = useState("");
 
   const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
@@ -401,24 +402,54 @@ const Premium = () => {
                 </button>
               ))}
             </div>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={5}
-              className="flex w-full rounded-xl border bg-card px-4 py-3 font-mono text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
-              placeholder={
-                mode === "concept"
-                  ? "Describe a concept, e.g. 'Explain how recursion works with a visual tree diagram'"
-                  : "Paste a code snippet to be explained visually…\n\ndef factorial(n):\n    if n <= 1: return 1\n    return n * factorial(n - 1)"
-              }
-            />
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className="flex h-11 w-full rounded-xl border bg-card px-4 text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
-              placeholder="Link to GitHub repo or article (optional)"
-            />
+            {mode === "concept" ? (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Concept</label>
+                  <p className="mb-2 text-xs text-muted-foreground">Describe an idea or algorithm you want explained visually.</p>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    rows={3}
+                    className="flex w-full rounded-xl border bg-card px-4 py-3 font-mono text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
+                    placeholder="e.g. 'Explain how recursion works with a visual tree diagram'"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Code <span className="text-muted-foreground font-normal">(optional)</span></label>
+                  <p className="mb-2 text-xs text-muted-foreground">Paste a snippet to be animated alongside the concept.</p>
+                  <textarea
+                    value={codeSnippet}
+                    onChange={(e) => setCodeSnippet(e.target.value)}
+                    rows={4}
+                    className="flex w-full rounded-xl border bg-card px-4 py-3 font-mono text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
+                    placeholder={"def factorial(n):\n    if n <= 1: return 1\n    return n * factorial(n - 1)"}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">GitHub Link <span className="text-muted-foreground font-normal">(optional)</span></label>
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    className="flex h-11 w-full rounded-xl border bg-card px-4 text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
+                    placeholder="https://github.com/user/repo"
+                  />
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">Repository Link</label>
+                <p className="mb-2 text-xs text-muted-foreground">Paste a GitHub repo URL — we'll analyze the code and generate a visual walkthrough.</p>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="flex h-11 w-full rounded-xl border bg-card px-4 text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
+                  placeholder="https://github.com/user/repo"
+                />
+              </div>
+            )}
           </div>
         </section>
 
@@ -457,7 +488,7 @@ const Premium = () => {
         <section className="mt-10">
           <button
             onClick={handlePremiumGenerate}
-            disabled={generating || !prompt.trim()}
+            disabled={generating || (mode === "concept" ? !prompt.trim() : !url.trim())}
             className="inline-flex h-12 items-center gap-2 rounded-xl bg-accent px-8 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:shadow-none"
           >
             {generating && <Loader2 className="h-4 w-4 animate-spin" />}
