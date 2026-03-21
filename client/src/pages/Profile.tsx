@@ -149,13 +149,18 @@ const Profile = () => {
 
         {/* Subtle upgrade note for free users */}
         {!isPremium && (
-          <section className="mt-12 rounded-2xl border border-dashed border-muted-foreground/20 p-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              Want custom prompts, avatars, and mood settings?{" "}
-              <Link to="/premium" className="font-semibold text-accent hover:underline">
-                Learn about Premium
-              </Link>
-            </p>
+          <section className="mt-12 rounded-2xl border border-accent/20 bg-accent/5 p-6 text-center">
+            <Crown className="mx-auto h-7 w-7 text-accent" />
+            <h3 className="mt-2 font-display text-base font-semibold">Want custom prompts, avatars & mood settings?</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Upgrade to Premium for the full experience.</p>
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
+            >
+              {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+              {upgrading ? "Upgrading…" : "Upgrade to Premium"}
+            </button>
           </section>
         )}
       </div>
