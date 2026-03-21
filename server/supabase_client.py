@@ -7,6 +7,9 @@ import httpx
 
 from config import settings
 
+import os
+from dotenv import load_dotenv
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,14 +20,15 @@ def update_request_status(
     error: Optional[str] = None,
 ) -> None:
     """Update a video_requests row in Supabase via PostgREST."""
-    if not settings.supabase_url or not settings.supabase_service_role_key:
-        logger.warning("[supabase] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — skipping")
-        return
+    # if not settings.supabase_url or not settings.supabase_service_role_key:
+    #     logger.warning("[supabase] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — skipping")
+    #     return
 
+    load_dotenv()
     url = f"{settings.supabase_url}/rest/v1/video_requests?id=eq.{request_id}"
     headers = {
-        "apikey": settings.supabase_service_role_key,
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "apikey": os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
+        "Authorization": f"Bearer {os.getenv('SUPABASE_SERVICE_ROLE_KEY')}",
         "Content-Type": "application/json",
         "Prefer": "return=minimal",
     }
