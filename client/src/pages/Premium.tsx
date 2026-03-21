@@ -39,10 +39,9 @@ const Premium = () => {
 
   // Generation state
   const [generating, setGenerating] = useState(false);
-  const [fakeStep, setFakeStep] = useState(-1);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
-  // Real polling state (premium)
+  // Real polling state
   const [requestId, setRequestId] = useState<string | null>(null);
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -50,7 +49,6 @@ const Premium = () => {
   const pollStartRef = useRef<number>(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // Stop polling helper
   const stopPolling = useCallback(() => {
@@ -65,7 +63,6 @@ const Premium = () => {
     pollStartRef.current = Date.now();
 
     pollRef.current = setInterval(async () => {
-      // Timeout check
       if (Date.now() - pollStartRef.current > POLL_TIMEOUT) {
         stopPolling();
         setGenerating(false);
@@ -89,7 +86,6 @@ const Premium = () => {
 
       if (data.status === "completed") {
         stopPolling();
-        // Fetch the generated video
         const { data: videoData } = await supabase
           .from("generated_videos")
           .select("video_url")
@@ -118,62 +114,10 @@ const Premium = () => {
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      stopPolling();
-      timerRef.current.forEach(clearTimeout);
-    };
+    return () => { stopPolling(); };
   }, [stopPolling]);
 
-  // ── Free user: fake generation ──
-  const handleFreeGenerate = () => {
-    if (!selectedPremade || generating) return;
-    const list = mode === "code" ? premadeCode : premadeConcepts;
-    const item = list.find((c) => c.id === selectedPremade);
-    const file = item?.file ?? selectedPremadeFile;
-    if (!file) return;
-
-    setGenerating(true);
-    setVideoUrl(null);
-    setFakeStep(0);
-
-    timerRef.current.forEach(clearTimeout);
-    timerRef.current = [];
-
-    FAKE_STEPS.forEach((_, i) => {
-      const t = setTimeout(() => setFakeStep(i), i * 1200);
-      timerRef.current.push(t);
-    });
-
-    const finalTimer = setTimeout(() => {
-      setGenerating(false);
-      setFakeStep(FAKE_STEPS.length);
-      setVideoUrl(file);
-    }, FAKE_STEPS.length * 1200 + 800);
-    timerRef.current.push(finalTimer);
-  };
-
-  const handleBrowserSelect = (item: AlgorithmItem) => {
-    setSelectedPremade(item.id);
-    setSelectedPremadeFile(item.file);
-  };
-
-  const handleUpgrade = async () => {
-    if (!user || upgrading) return;
-    setUpgrading(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ tier: "premium" })
-      .eq("user_id", user.id);
-    if (error) {
-      toast({ title: "Error", description: "Upgrade failed. Please try again.", variant: "destructive" });
-    } else {
-      await refreshProfile();
-      toast({ title: "🎉 Welcome to Premium!", description: "You now have full access to custom video generation." });
-    }
-    setUpgrading(false);
-  };
-
-  // ── Premium user: real generation ──
+  // Premium user: real generation
   const handlePremiumGenerate = async () => {
     const isPromptMode = mode === "concept";
     if (isPromptMode ? !prompt.trim() : !url.trim()) return;
@@ -222,20 +166,12 @@ const Premium = () => {
 
   const handleCancel = () => {
     stopPolling();
-    timerRef.current.forEach(clearTimeout);
-    timerRef.current = [];
     setVideoUrl(null);
     setGenerating(false);
-    setFakeStep(-1);
     setRequestId(null);
     setCurrentStatus(null);
     setErrorMessage(null);
   };
-
-  // Reset premade selection when mode changes (free only)
-  useEffect(() => {
-    setSelectedPremade(null);
-  }, [mode]);
 
   if (loading || profileLoading) {
     return (
@@ -246,15 +182,12 @@ const Premium = () => {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-
-  const activePremadeList = mode === "code" ? premadeCode : premadeConcepts;
+  if (!isPremium) return <Navigate to="/concepts" replace />;
 
   // Compute current step index for the real pipeline
   const currentStepIndex = currentStatus
     ? STATUS_STEPS.findIndex((s) => s.status === currentStatus)
     : -1;
-
-  if (!isPremium) return <Navigate to="/concepts" replace />;
 
   // ── PREMIUM USER LAYOUT ──
   return (
