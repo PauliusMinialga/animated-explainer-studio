@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Crown, Download, Loader2, Lock } from "lucide-react";
+import { Check, Crown, Download, Loader2, Lock, Play } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const BACKEND = "http://localhost:8000";
 
@@ -14,21 +16,24 @@ const avatars = [
 const moods = ["Friendly", "Technical", "Energetic", "Calm"];
 const levels = ["Beginner", "Advanced", "Expert"];
 
-const STEPS = [
+const premadeConcepts = [
+  { id: "recursion", label: "Recursion", file: "/demo/recursion.mp4" },
+  { id: "binary_search", label: "Binary Search", file: "/demo/binary_search.mp4" },
+  { id: "tcp_handshake", label: "TCP Handshake", file: "/demo/tcp_handshake.mp4" },
+  { id: "gradient_descent", label: "Gradient Descent", file: "/demo/gradient_descent.mp4" },
+];
+
+const premadeCode = [
+  { id: "explain_factorial", label: "Factorial", file: "/demo/explain_factorial.mp4" },
+  { id: "explain_dijkstra", label: "Dijkstra", file: "/demo/explain_dijkstra.mp4" },
+];
+
+const FAKE_STEPS = [
   "Generating scripts…",
   "Rendering animation…",
   "Adding voiceover…",
-  "Generating avatar…",
+  "Finalising video…",
 ];
-
-type Job = {
-  job_id: string;
-  status: "pending" | "running" | "done" | "failed";
-  progress: string | null;
-  animation_url: string | null;
-  avatar_url: string | null;
-  error: string | null;
-};
 
 /** Overlay badge shown on locked sections for free users */
 const LockedOverlay = ({ label }: { label: string }) => (
@@ -42,78 +47,132 @@ const LockedOverlay = ({ label }: { label: string }) => (
 
 const Premium = () => {
   const { user, loading, isPremium, profileLoading } = useAuth();
+
+  // Premium controls
   const [selectedAvatar, setSelectedAvatar] = useState("ava1");
   const [mode, setMode] = useState<"concept" | "code">("concept");
   const [mood, setMood] = useState("Friendly");
   const [level, setLevel] = useState("Beginner");
   const [prompt, setPrompt] = useState("");
   const [url, setUrl] = useState("");
-  const [job, setJob] = useState<Job | null>(null);
-  const [activeStep, setActiveStep] = useState(-1);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const animRef = useRef<HTMLVideoElement>(null);
-  const avatarRef = useRef<HTMLVideoElement>(null);
 
-  const stepForProgress = (progress: string | null) => {
-    if (!progress) return -1;
-    const p = progress.toLowerCase();
-    if (p.includes("script")) return 0;
-    if (p.includes("render") || p.includes("animation")) return 1;
-    if (p.includes("voice") || p.includes("tts")) return 2;
-    if (p.includes("avatar")) return 3;
-    if (p.includes("done")) return 4;
-    return activeStep;
-  };
+  // Free user: premade selection
+  const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
 
-  const stopPolling = () => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = null;
-  };
+  // Generation state
+  const [generating, setGenerating] = useState(false);
+  const [fakeStep, setFakeStep] = useState(-1);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [premiumRequestSent, setPremiumRequestSent] = useState(false);
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) return;
-    setJob(null);
-    setActiveStep(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-    const res = await fetch(`${BACKEND}/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: prompt.trim(),
-        url: url.trim() || null,
-        mode: isPremium ? mode : "concept",
-        level: isPremium ? level.toLowerCase() : "beginner",
-        mood: isPremium ? mood.toLowerCase() : "friendly",
-      }),
+  // ── Free user: fake generation ──
+  const handleFreeGenerate = () => {
+    if (!selectedPremade || generating) return;
+    const list = mode === "code" ? premadeCode : premadeConcepts;
+    const item = list.find((c) => c.id === selectedPremade);
+    if (!item) return;
+
+    setGenerating(true);
+    setVideoUrl(null);
+    setFakeStep(0);
+    setPremiumRequestSent(false);
+
+    timerRef.current.forEach(clearTimeout);
+    timerRef.current = [];
+
+    FAKE_STEPS.forEach((_, i) => {
+      const t = setTimeout(() => setFakeStep(i), i * 1200);
+      timerRef.current.push(t);
     });
 
-    if (!res.ok) {
-      setJob({ job_id: "", status: "failed", progress: null, animation_url: null, avatar_url: null, error: "Failed to start generation." });
-      return;
-    }
+    const finalTimer = setTimeout(() => {
+      setGenerating(false);
+      setFakeStep(FAKE_STEPS.length);
+      setVideoUrl(item.file);
+    }, FAKE_STEPS.length * 1200 + 800);
+    timerRef.current.push(finalTimer);
+  };
 
-    const initial: Job = await res.json();
-    setJob(initial);
+  // ── Premium user: real request ──
+  const handlePremiumGenerate = async () => {
+    if (!prompt.trim() || generating) return;
 
-    pollRef.current = setInterval(async () => {
-      try {
-        const poll = await fetch(`${BACKEND}/jobs/${initial.job_id}`);
-        const data: Job = await poll.json();
-        setJob(data);
-        setActiveStep(stepForProgress(data.progress));
-        if (data.status === "done" || data.status === "failed") stopPolling();
-      } catch {
-        stopPolling();
+    const payload = {
+      prompt: prompt.trim(),
+      url: url.trim() || null,
+      mode,
+      avatar: selectedAvatar,
+      mood: mood.toLowerCase(),
+      level: level.toLowerCase(),
+      user_id: user?.id,
+    };
+
+    console.log("[GenerateVideo] Request payload:", JSON.stringify(payload, null, 2));
+
+    setGenerating(true);
+    setVideoUrl(null);
+    setFakeStep(0);
+    setPremiumRequestSent(false);
+
+    try {
+      // Store the request in Supabase so the team can pick it up
+      const { error } = await supabase.from("video_requests").insert({
+        user_id: user!.id,
+        topic: prompt.trim(),
+        mood: mood.toLowerCase(),
+        level: level.toLowerCase(),
+        avatar: selectedAvatar,
+        status: "pending",
+      });
+
+      if (error) {
+        console.error("Failed to save video request:", error);
+        toast({ title: "Error", description: "Failed to submit request. Please try again.", variant: "destructive" });
+        setGenerating(false);
+        setFakeStep(-1);
+        return;
       }
-    }, 2500);
+
+      // Walk through fake progress while backend works
+      FAKE_STEPS.forEach((_, i) => {
+        const t = setTimeout(() => setFakeStep(i), i * 1500);
+        timerRef.current.push(t);
+      });
+
+      const doneTimer = setTimeout(() => {
+        setGenerating(false);
+        setFakeStep(FAKE_STEPS.length);
+        setPremiumRequestSent(true);
+        toast({ title: "Request submitted!", description: "Your video is being generated. We'll notify you when it's ready." });
+      }, FAKE_STEPS.length * 1500 + 500);
+      timerRef.current.push(doneTimer);
+    } catch {
+      setGenerating(false);
+      setFakeStep(-1);
+      toast({ title: "Error", description: "Something went wrong.", variant: "destructive" });
+    }
   };
 
-  const handlePlay = () => {
-    animRef.current?.play();
-    avatarRef.current?.play();
+  const handleClose = () => {
+    timerRef.current.forEach(clearTimeout);
+    timerRef.current = [];
+    setVideoUrl(null);
+    setGenerating(false);
+    setFakeStep(-1);
+    setPremiumRequestSent(false);
   };
 
-  useEffect(() => () => stopPolling(), []);
+  useEffect(() => {
+    return () => timerRef.current.forEach(clearTimeout);
+  }, []);
+
+  // Reset premade selection when mode changes (free only)
+  useEffect(() => {
+    setSelectedPremade(null);
+  }, [mode]);
 
   if (loading || profileLoading) {
     return (
@@ -123,13 +182,9 @@ const Premium = () => {
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!user) return <Navigate to="/login" replace />;
 
-  const isRunning = job?.status === "pending" || job?.status === "running";
-  const isDone = job?.status === "done";
-  const isFailed = job?.status === "failed";
+  const activePremadeList = mode === "code" ? premadeCode : premadeConcepts;
 
   return (
     <div className="px-6 py-12">
@@ -146,10 +201,10 @@ const Premium = () => {
         <p className="mt-2 text-muted-foreground">
           {isPremium
             ? "Select an avatar, write your prompt, and generate an animated explanation."
-            : "Write a concept prompt to generate a pre-made animated explanation. Upgrade to unlock avatars, code mode & settings."}
+            : "Pick a premade concept or code explanation to watch. Upgrade to unlock custom generation."}
         </p>
 
-        {/* Avatar Selection — locked for free */}
+        {/* ── Avatar Selection — locked for free ── */}
         <section className="relative mt-10">
           {!isPremium && <LockedOverlay label="Premium — Upgrade to choose an avatar" />}
           <h2 className="font-display text-lg font-semibold">Choose Avatar</h2>
@@ -175,26 +230,27 @@ const Premium = () => {
           </div>
         </section>
 
-        {/* Prompt Input */}
+        {/* ── Prompt / Premade Section ── */}
         <section className="mt-10">
-          <h2 className="font-display text-lg font-semibold">Your Prompt</h2>
+          <h2 className="font-display text-lg font-semibold">
+            {isPremium ? "Your Prompt" : "Choose a Video"}
+          </h2>
           <div className="mt-4 space-y-4">
-            {/* Mode toggle — locked for free */}
+            {/* Mode toggle — free users can switch between concept/code premade lists */}
             <div className="relative inline-block">
               {!isPremium && (
                 <div className="absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-muted">
                   <Lock className="h-3 w-3 text-muted-foreground" />
                 </div>
               )}
-              <div className={`inline-flex rounded-xl border bg-secondary p-1 ${!isPremium ? "opacity-50" : ""}`}>
+              <div className={`inline-flex rounded-xl border bg-secondary p-1 ${!isPremium ? "opacity-50 pointer-events-none" : ""}`}>
                 {(["concept", "code"] as const).map((m) => (
                   <button
                     key={m}
-                    onClick={() => isPremium && setMode(m)}
-                    disabled={!isPremium}
+                    onClick={() => setMode(m)}
                     className={`rounded-lg px-5 py-2 text-sm font-medium transition-all ${
                       mode === m ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"
-                    } ${!isPremium ? "cursor-not-allowed" : ""}`}
+                    }`}
                   >
                     {m === "concept" ? "Concept Mode" : "Code Mode"}
                   </button>
@@ -202,24 +258,75 @@ const Premium = () => {
               </div>
             </div>
 
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={5}
-              className="flex w-full rounded-xl border bg-card px-4 py-3 font-mono text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
-              placeholder="Describe a concept, e.g. 'Explain how recursion works with a visual tree diagram'"
-            />
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className="flex h-11 w-full rounded-xl border bg-card px-4 text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
-              placeholder="Link to GitHub repo or article (optional)"
-            />
+            {isPremium ? (
+              /* Premium: free-form input */
+              <>
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  rows={5}
+                  className="flex w-full rounded-xl border bg-card px-4 py-3 font-mono text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
+                  placeholder={
+                    mode === "concept"
+                      ? "Describe a concept, e.g. 'Explain how recursion works with a visual tree diagram'"
+                      : "Paste a code snippet to be explained visually…\n\ndef factorial(n):\n    if n <= 1: return 1\n    return n * factorial(n - 1)"
+                  }
+                />
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="flex h-11 w-full rounded-xl border bg-card px-4 text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
+                  placeholder="Link to GitHub repo or article (optional)"
+                />
+              </>
+            ) : (
+              /* Free: premade video buttons */
+              <>
+                <div className="relative">
+                  <textarea
+                    disabled
+                    rows={3}
+                    className="flex w-full cursor-not-allowed rounded-xl border bg-card px-4 py-3 font-mono text-sm opacity-40 outline-none"
+                    placeholder="Custom prompts are a Premium feature…"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    disabled
+                    type="url"
+                    className="flex h-11 w-full cursor-not-allowed rounded-xl border bg-card px-4 text-sm opacity-40 outline-none"
+                    placeholder="GitHub link — Premium only"
+                  />
+                </div>
+                <div>
+                  <p className="mb-3 text-sm font-medium text-muted-foreground">
+                    Select a premade {mode === "code" ? "code" : "concept"} video:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {activePremadeList.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedPremade(item.id)}
+                        disabled={generating}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all ${
+                          selectedPremade === item.id
+                            ? "border-accent bg-accent/10 text-accent shadow-sm"
+                            : "bg-card text-muted-foreground hover:border-accent/40 hover:text-foreground"
+                        } disabled:opacity-50`}
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
-        {/* Settings — locked for free */}
+        {/* ── Settings — locked for free ── */}
         <section className="relative mt-10">
           {!isPremium && <LockedOverlay label="Premium — Upgrade to customise mood & level" />}
           <h2 className="font-display text-lg font-semibold">Settings</h2>
@@ -251,22 +358,23 @@ const Premium = () => {
           </div>
         </section>
 
-        {/* Generate */}
+        {/* ── Generate Button ── */}
         <section className="mt-10">
           <button
-            onClick={handleGenerate}
-            disabled={isRunning || !prompt.trim()}
+            onClick={isPremium ? handlePremiumGenerate : handleFreeGenerate}
+            disabled={generating || (isPremium ? !prompt.trim() : !selectedPremade)}
             className="inline-flex h-12 items-center gap-2 rounded-xl bg-accent px-8 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:shadow-none"
           >
-            {isRunning && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isRunning ? "Generating…" : "Generate Video"}
+            {generating && <Loader2 className="h-4 w-4 animate-spin" />}
+            {generating ? "Generating…" : "Generate Video"}
           </button>
 
-          {(isRunning || isDone || isFailed) && (
+          {/* Progress steps */}
+          {(generating || fakeStep === FAKE_STEPS.length) && !videoUrl && !premiumRequestSent && (
             <div className="mt-6 space-y-3 rounded-xl border bg-card p-6">
-              {STEPS.map((label, i) => {
-                const done = i < activeStep || isDone;
-                const active = i === activeStep && isRunning;
+              {FAKE_STEPS.map((label, i) => {
+                const done = i < fakeStep || fakeStep === FAKE_STEPS.length;
+                const active = i === fakeStep && generating;
                 return (
                   <div key={i} className="flex items-center gap-3">
                     {done ? (
@@ -282,28 +390,46 @@ const Premium = () => {
                   </div>
                 );
               })}
-              {isFailed && (
-                <p className="mt-2 text-sm text-destructive">{job?.error ?? "Generation failed."}</p>
-              )}
             </div>
           )}
 
-          {isDone && job?.animation_url && job?.avatar_url && (
-            <div className="mt-6 overflow-hidden rounded-2xl border bg-black">
-              <div className="relative aspect-video cursor-pointer" onClick={handlePlay}>
-                <video ref={animRef} src={`${BACKEND}${job.animation_url}`} className="h-full w-full object-contain" controls={false} playsInline />
-                <video ref={avatarRef} src={`${BACKEND}${job.avatar_url}`} className="absolute bottom-4 right-4 w-1/4 rounded-xl shadow-xl" controls={false} playsInline />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity hover:opacity-0">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-lg">
-                    <span className="ml-1 text-2xl">▶</span>
-                  </div>
-                </div>
+          {/* Premium: request submitted confirmation */}
+          {premiumRequestSent && (
+            <div className="mt-6 rounded-xl border border-accent/30 bg-accent/5 p-6 text-center">
+              <Check className="mx-auto h-10 w-10 text-accent" />
+              <h3 className="mt-3 font-display text-lg font-semibold">Request Submitted</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your video generation request has been queued. You'll be notified when it's ready.
+              </p>
+              <button
+                onClick={handleClose}
+                className="mt-4 inline-flex h-10 items-center rounded-xl border px-5 text-sm font-medium transition-colors hover:bg-secondary"
+              >
+                Create Another
+              </button>
+            </div>
+          )}
+
+          {/* Free: video player */}
+          {videoUrl && (
+            <div className="mt-6 overflow-hidden rounded-2xl border bg-card shadow-lg">
+              <div className="relative aspect-video bg-black">
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  className="h-full w-full object-contain"
+                  controls
+                  autoPlay
+                  playsInline
+                />
               </div>
-              <div className="flex items-center justify-between border-t p-4">
-                <span className="text-sm text-muted-foreground">Generated video</span>
+              <div className="flex items-center justify-between p-4">
+                <p className="text-sm font-medium">
+                  {activePremadeList.find((c) => c.id === selectedPremade)?.label ?? "Video"} — AI Explanation
+                </p>
                 <a
-                  href={`${BACKEND}${job.animation_url}`}
-                  download="animation.mp4"
+                  href={videoUrl}
+                  download
                   className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                 >
                   <Download className="h-4 w-4" /> Download
