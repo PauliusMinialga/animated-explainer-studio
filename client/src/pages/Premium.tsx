@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Check, Crown, Download, Loader2, X } from "lucide-react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -28,6 +28,7 @@ const POLL_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 const Premium = () => {
   const { user, loading, isPremium, profileLoading } = useAuth();
+  const navigate = useNavigate();
 
   // Premium controls
   const [selectedAvatar, setSelectedAvatar] = useState("c3po");
@@ -76,7 +77,7 @@ const Premium = () => {
 
       const { data, error } = await supabase
         .from("video_requests")
-        .select("status, error_message")
+        .select("status, error_message, backend_job_id, job_type")
         .eq("id", reqId)
         .maybeSingle();
 
@@ -86,16 +87,25 @@ const Premium = () => {
 
       if (data.status === "completed") {
         stopPolling();
+        setGenerating(false);
+
+        // Repo jobs → redirect to React Flow player
+        if (data.job_type === "repo" && data.backend_job_id) {
+          toast({ title: "Analysis ready!", description: "Redirecting to interactive explainer…" });
+          navigate(`/repo/${data.backend_job_id}`);
+          return;
+        }
+
+        // Code jobs → fetch video from generated_videos
         const { data: videoData } = await supabase
           .from("generated_videos")
           .select("video_url")
           .eq("request_id", reqId)
           .maybeSingle();
 
-        setGenerating(false);
         if (videoData?.video_url) {
           setVideoUrl(videoData.video_url);
-          toast({ title: "🎉 Video ready!", description: "Your video has been generated." });
+          toast({ title: "Video ready!", description: "Your video has been generated." });
         } else {
           toast({ title: "Video completed", description: "Video processed but URL not available yet." });
         }

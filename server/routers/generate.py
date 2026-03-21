@@ -78,9 +78,10 @@ async def _run_pipeline(job_id: str, req: GenerateRequest, base_url: str = "http
     try:
         out_dir = job_dir(job_id)
         is_github_url = req.prompt.strip().startswith("https://github.com/")
+        jtype = "repo" if is_github_url else "code"
 
         if rid:
-            update_request_status(rid, "processing")
+            update_request_status(rid, "generating_script", backend_job_id=job_id, job_type=jtype)
 
         if is_github_url:
             await _run_repo_pipeline(job_id, req, out_dir, base_url)
@@ -108,6 +109,7 @@ async def _run_pipeline(job_id: str, req: GenerateRequest, base_url: str = "http
 async def _run_repo_pipeline(
     job_id: str, req: GenerateRequest, out_dir: Path, base_url: str,
 ):
+    rid = req.request_id
     _set(job_id, status=JobStatus.running, job_type=JobType.repo, progress="Ingesting GitHub repo…")
     logger.info("[%s] Ingesting repo: %s", job_id, req.prompt.strip())
 
@@ -124,6 +126,8 @@ async def _run_repo_pipeline(
 
     # Stage 1: Architecture
     _set(job_id, progress="Analyzing architecture…")
+    if rid:
+        update_request_status(rid, "generating_script")
     architecture = await asyncio.to_thread(
         analyze_repo, repo_content, req.mood, req.level,
     )
@@ -133,6 +137,8 @@ async def _run_repo_pipeline(
 
     # Stage 2: Storyboard
     _set(job_id, progress="Generating storyboard…")
+    if rid:
+        update_request_status(rid, "rendering")
     storyboard = await asyncio.to_thread(generate_storyboard, architecture)
     sb_dict = storyboard.model_dump()
     (out_dir / "storyboard.json").write_text(json.dumps(sb_dict, indent=2))
@@ -146,6 +152,8 @@ async def _run_repo_pipeline(
     # ── Per-scene TTS audio ───────────────────────────────────────────────────
     if settings.runware_api_key:
         _set(job_id, progress="Generating scene audio…")
+        if rid:
+            update_request_status(rid, "adding_voiceover")
         logger.info("[%s] Generating per-scene TTS (%d scenes)", job_id, len(narration.scenes))
 
         # Generate all scene audio files in parallel
@@ -183,6 +191,8 @@ async def _run_repo_pipeline(
     # ── Avatar videos (intro + outro talking head) ────────────────────────────
     if settings.runware_api_key and settings.fal_key:
         _set(job_id, progress="Generating avatar videos…")
+        if rid:
+            update_request_status(rid, "finalizing")
         try:
             veed = await asyncio.wait_for(
                 run_veed_pipeline(
@@ -210,6 +220,7 @@ async def _run_repo_pipeline(
 async def _run_code_pipeline(
     job_id: str, req: GenerateRequest, out_dir: Path, base_url: str,
 ):
+    rid = req.request_id
     _set(job_id, status=JobStatus.running, job_type=JobType.code, progress="Enriching prompt…")
     enriched_prompt = await enrich_prompt(req.prompt, req.url)
 
@@ -235,6 +246,8 @@ async def _run_code_pipeline(
 
     # Render Manim
     _set(job_id, progress="Rendering animation…")
+    if rid:
+        update_request_status(rid, "rendering")
     animation_path = await render_manim(
         out_dir, script_str=manim_script, scene_class="GeneratedScene",
     )
@@ -251,6 +264,8 @@ async def _run_code_pipeline(
 
     # VEED pipeline
     if settings.runware_api_key and settings.fal_key:
+        if rid:
+            update_request_status(rid, "adding_voiceover")
         veed = await run_veed_pipeline(
             intro_text=tts.intro,
             info_text=tts.info,
@@ -259,6 +274,8 @@ async def _run_code_pipeline(
         )
 
         _set(job_id, progress="Assembling final video…")
+        if rid:
+            update_request_status(rid, "finalizing")
         final_path = out_dir / "final.mp4"
         await asyncio.to_thread(
             merge_final,
