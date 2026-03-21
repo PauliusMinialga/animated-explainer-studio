@@ -46,6 +46,7 @@ const Premium = () => {
   const [mood, setMood] = useState("Friendly");
   const [level, setLevel] = useState("Beginner");
   const [prompt, setPrompt] = useState("");
+  const [codeSnippet, setCodeSnippet] = useState("");
   const [url, setUrl] = useState("");
 
   const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
