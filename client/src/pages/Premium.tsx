@@ -38,7 +38,7 @@ const FAKE_STEPS = [
 
 
 const Premium = () => {
-  const { user, loading, isPremium, profileLoading } = useAuth();
+  const { user, loading, isPremium, profileLoading, refreshProfile } = useAuth();
 
   // Premium controls
   const [selectedAvatar, setSelectedAvatar] = useState("ava1");
