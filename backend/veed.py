@@ -144,15 +144,15 @@ def create_veed_from_script(script: TTSScript, avatar: Avatar) -> RequestRespons
     return RequestResponse(intro=intro_video, info=info_audio_file, outro=outro_video)
 
 
-if __name__ == "__main__":
-    random.seed(time.time() * 1000)
-    response = create_veed_from_script(
-        script=TTSScript(
-            intro="Hello and welcome to your first vizify video. We are here to help you tackle every challenge you face. Carrying you where need. Have fun.",
-            info="Normally this part is slightly longer. I will keep it short for now.",
-            outro="That was it, have a great day and I hope to see you again soon.",
-            id=random.randint(0, 1_000_000_000),
-        ),
-        avatar=Avatar.SUPER_MAN,
-    )
-    print(response)
+# if __name__ == "__main__":
+#     random.seed(time.time() * 1000)
+#     response = create_veed_from_script(
+#         script=TTSScript(
+#             intro="Hello and welcome to your first vizify video. We are here to help you tackle every challenge you face. Carrying you where need. Have fun.",
+#             info="Normally this part is slightly longer. I will keep it short for now.",
+#             outro="That was it, have a great day and I hope to see you again soon.",
+#             id=random.randint(0, 1_000_000_000),
+#         ),
+#         avatar=Avatar.SUPER_MAN,
+#     )
+#     print(response)
