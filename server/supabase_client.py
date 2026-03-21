@@ -16,6 +16,9 @@ def get_client() -> Optional[Client]:
     global _client
     if _client is not None:
         return _client
+    logger.info("[supabase] SUPABASE_URL=%r, SERVICE_KEY=%s",
+                settings.supabase_url,
+                "set" if settings.supabase_service_role_key else "empty")
     if not settings.supabase_url or not settings.supabase_service_role_key:
         logger.warning("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — status updates disabled")
         return None
