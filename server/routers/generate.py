@@ -4,14 +4,12 @@ Generate endpoint with async job tracking.
 POST /generate   → starts background pipeline, returns job_id immediately
 GET  /jobs/{id}  → poll for status, progress, animation_url, avatar_url
 
-No server-side merge: both videos are returned separately and composited
-in the browser (animation full-screen, avatar overlay bottom-right via CSS).
-This removes the heaviest pipeline step and lets both videos stream directly
-from Supabase Storage.
+Videos are saved locally and served via GET /files/{job_id}/{filename}.
+No server-side merge: both videos composited in the browser via CSS overlay.
 """
 
 import asyncio
-import tempfile
+import shutil
 import uuid
 from pathlib import Path
 
@@ -22,13 +20,13 @@ from pipeline.enrich import enrich_prompt
 from pipeline.scripts import generate_scripts
 from pipeline.manim_render import render_manim
 from pipeline.tts import generate_tts
-from pipeline.avatar import upload_audio, generate_avatar
-from database import upload_video
+from pipeline.avatar import generate_avatar
+from database import job_dir
 from catalog import CATALOG_BY_SLUG
 
 router = APIRouter(tags=["generate"])
 
-# In-memory job store — good enough for a hackathon
+# In-memory job store — sufficient for hackathon
 _jobs: dict[str, dict] = {}
 
 
@@ -60,11 +58,12 @@ async def get_job(job_id: str):
 
 async def _run_pipeline(job_id: str, req: GenerateRequest):
     try:
-        _set(job_id, status=JobStatus.running, progress="Enriching prompt…")
+        out_dir = job_dir(job_id)
 
+        _set(job_id, status=JobStatus.running, progress="Enriching prompt…")
         enriched_prompt = await enrich_prompt(req.prompt, req.url)
 
-        # Check if this matches a pre-built catalog entry (slug match)
+        # Check if prompt matches a pre-built catalog entry
         slug_guess = req.prompt.strip().lower().replace(" ", "-")
         catalog_entry = CATALOG_BY_SLUG.get(slug_guess)
         use_cached_script = catalog_entry and catalog_entry.has_script
@@ -76,7 +75,6 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             level=req.level,
             mood=req.mood,
         )
-
         narration = scripts["narration"]
 
         if use_cached_script:
@@ -88,55 +86,41 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             scene_class = "GeneratedScene"
             manim_script_str = scripts["manim_script"]
 
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_dir = Path(tmp)
+        _set(job_id, progress="Rendering animation & generating voice in parallel…")
 
-            _set(job_id, progress="Rendering animation & generating voice in parallel…")
-
-            audio_path = tmp_dir / "narration.mp3"
-
-            async def _render():
-                return await render_manim(
-                    tmp_dir,
-                    script_str=manim_script_str,
-                    script_path=script_path,
-                    scene_class=scene_class,
-                )
-
-            async def _tts_and_upload():
-                await generate_tts(narration, audio_path)
-                return await upload_audio(audio_path)
-
-            # Manim render and TTS run in parallel
-            animation_path, audio_url = await asyncio.gather(
-                _render(), _tts_and_upload()
+        async def _render():
+            return await render_manim(
+                out_dir,
+                script_str=manim_script_str,
+                script_path=script_path,
+                scene_class=scene_class,
             )
 
-            _set(job_id, progress="Generating avatar video…")
-            avatar_path = tmp_dir / "avatar.mp4"
-            await generate_avatar(
-                audio_url,
-                avatar_path,
-                avatar_image_url=req.avatar_image_url,
-            )
+        # Manim render and Kokoro TTS run in parallel
+        animation_path, audio_url = await asyncio.gather(_render(), generate_tts(narration))
 
-            _set(job_id, progress="Uploading to storage…")
-            animation_url, avatar_url = await asyncio.gather(
-                upload_video(str(animation_path), f"generated/{job_id}/animation.mp4"),
-                upload_video(str(avatar_path), f"generated/{job_id}/avatar.mp4"),
-            )
+        _set(job_id, progress="Generating avatar video…")
+        avatar_path = out_dir / "avatar.mp4"
+        await generate_avatar(
+            audio_url,
+            avatar_path,
+            avatar_image_url=req.avatar_image_url,
+        )
+
+        # Copy animation to a stable output path
+        final_animation = out_dir / "animation.mp4"
+        if animation_path != final_animation:
+            shutil.copy2(animation_path, final_animation)
 
         _set(
             job_id,
             status=JobStatus.done,
             progress="Done",
-            animation_url=animation_url,
-            avatar_url=avatar_url,
+            animation_url=f"/files/{job_id}/animation.mp4",
+            avatar_url=f"/files/{job_id}/avatar.mp4",
         )
 
     except Exception as exc:
         _set(job_id, status=JobStatus.failed, progress="Failed", error=str(exc))
         raise
 
-        )
-        raise

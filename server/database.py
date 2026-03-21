@@ -1,17 +1,29 @@
 from functools import lru_cache
-from supabase import create_client, Client
-from config import settings
+from pathlib import Path
+
+# Local output directory — generated videos are served directly from FastAPI
+OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR.mkdir(exist_ok=True)
 
 
-@lru_cache(maxsize=1)
-def get_supabase() -> Client:
+def job_dir(job_id: str) -> Path:
+    d = OUTPUT_DIR / job_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+# ── Supabase (optional — not used in MVP, kept for future) ──────────────────
+
+def get_supabase():
+    from config import settings
     if not settings.supabase_url or not settings.supabase_key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set")
+    from supabase import create_client
     return create_client(settings.supabase_url, settings.supabase_key)
 
 
 async def get_cached_video_url(slug: str) -> str | None:
-    """Fetch the video_url for a cached video from Supabase."""
+    """Fetch the video_url for a cached video from Supabase (optional)."""
     try:
         client = get_supabase()
         result = (
@@ -24,23 +36,3 @@ async def get_cached_video_url(slug: str) -> str | None:
         return result.data.get("video_url") if result.data else None
     except Exception:
         return None
-
-
-async def upsert_cached_video(slug: str, video_url: str) -> None:
-    """Store or update a cached video URL in Supabase."""
-    client = get_supabase()
-    client.table("cached_videos").upsert(
-        {"slug": slug, "video_url": video_url}
-    ).execute()
-
-
-async def upload_video(local_path: str, remote_name: str) -> str:
-    """Upload a video file to Supabase Storage and return its public URL."""
-    client = get_supabase()
-    with open(local_path, "rb") as f:
-        client.storage.from_(settings.video_bucket).upload(
-            remote_name,
-            f,
-            {"content-type": "video/mp4", "upsert": "true"},
-        )
-    return client.storage.from_(settings.video_bucket).get_public_url(remote_name)

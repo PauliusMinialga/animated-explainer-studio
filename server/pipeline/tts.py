@@ -1,19 +1,22 @@
-"""OpenAI TTS — generate narration audio from text."""
+"""fal.ai Kokoro TTS — converts narration text to audio, returns fal.media URL."""
 
-from pathlib import Path
-from openai import AsyncOpenAI
+import os
+import fal_client
 from config import settings
 
 
-async def generate_tts(text: str, out_path: Path) -> Path:
-    if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
+async def generate_tts(text: str) -> str:
+    """Returns the fal.media URL of the generated audio (mp3)."""
+    if not settings.fal_key:
+        raise RuntimeError("FAL_KEY is not set")
+    os.environ["FAL_KEY"] = settings.fal_key
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-    response = await client.audio.speech.create(
-        model="tts-1",
-        voice="nova",
-        input=text,
+    result = fal_client.subscribe(
+        "fal-ai/kokoro",
+        arguments={
+            "prompt": text,
+            "voice": "af_nova",
+            "speed": 0.95,
+        },
     )
-    response.write_to_file(out_path)
-    return out_path
+    return result["audio"]["url"]

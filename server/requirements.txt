@@ -4,16 +4,14 @@ moderngl
 pycairo
 numpy
 
-# API clients
-openai
-anthropic
+# Script generation
+mistralai
+
+# fal.ai (TTS via Kokoro + avatar via VEED Fabric 1.0)
 fal-client
 
-# Video merge — no longer needed server-side (composited in browser)
-# moviepy
-
 # Web framework
-fastapi
+fastapi[standard]
 uvicorn[standard]
 python-multipart
 
@@ -21,7 +19,7 @@ python-multipart
 pydantic-settings
 python-dotenv
 
-# Database
+# Database (optional — not used in MVP)
 supabase
 
 # Enrichment

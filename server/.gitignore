@@ -18,4 +18,4 @@ animations/
 
 # Claude
 .claude_history
-.claude/
+.claude/output/
