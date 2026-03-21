@@ -26,7 +26,8 @@ const FAKE_STEPS = [
 ];
 
 const Concepts = () => {
-  const { user, loading, isPremium, profileLoading } = useAuth();
+  const { user, loading, isPremium, profileLoading, refreshProfile } = useAuth();
+  const [upgrading, setUpgrading] = useState(false);
 
   const [mode, setMode] = useState<"concept" | "code">("concept");
   const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
