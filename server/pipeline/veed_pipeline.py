@@ -103,24 +103,18 @@ async def run_veed_pipeline(
     outro_mp3 = job_dir / "outro.mp3"
 
     logger.info("Generating TTS audio (intro + info + outro)…")
-    await asyncio.wait_for(
-        asyncio.gather(
-            _tts(intro_text, intro_mp3),
-            _tts(info_text, info_mp3),
-            _tts(outro_text, outro_mp3),
-        ),
-        timeout=120,  # 2 min for all 3 TTS calls
+    await asyncio.gather(
+        _tts(intro_text, intro_mp3),
+        _tts(info_text, info_mp3),
+        _tts(outro_text, outro_mp3),
     )
 
     logger.info("Generating avatar videos (intro + outro)…")
     intro_mp4 = job_dir / "intro.mp4"
     outro_mp4 = job_dir / "outro.mp4"
-    await asyncio.wait_for(
-        asyncio.gather(
-            _avatar_video(intro_mp3, intro_mp4),
-            _avatar_video(outro_mp3, outro_mp4),
-        ),
-        timeout=240,  # 4 min for both avatar videos
+    await asyncio.gather(
+        _avatar_video(intro_mp3, intro_mp4),
+        _avatar_video(outro_mp3, outro_mp4),
     )
 
     return VeedResult(

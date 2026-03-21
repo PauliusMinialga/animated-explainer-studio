@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Check, Crown, Download, Loader2, X } from "lucide-react";
+import { Crown, Download, Loader2, X } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,17 +14,19 @@ const avatars = [
 const moods = ["Friendly", "Technical", "Energetic", "Calm"];
 const levels = ["Beginner", "Advanced", "Expert"];
 
-// Real pipeline statuses → step index + label
-const STATUS_STEPS = [
-  { status: "pending", label: "Queuing request…" },
-  { status: "generating_script", label: "Generating script with AI…" },
-  { status: "rendering", label: "Rendering animation…" },
-  { status: "adding_voiceover", label: "Adding avatar voiceover…" },
-  { status: "finalizing", label: "Finalizing video…" },
-] as const;
-
 const POLL_INTERVAL = 3000;
-const POLL_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const POLL_TIMEOUT = 10 * 60 * 1000; // 10 minutes — avatar gen can be slow
+
+const COOKING_MESSAGES = [
+  "Warming up the AI kitchen…",
+  "Chopping your repo into digestible pieces…",
+  "Seasoning with architecture insights…",
+  "Letting the storyboard simmer…",
+  "Whipping up some narration sauce…",
+  "Plating the avatar performance…",
+  "Almost ready — adding final garnish…",
+  "Your explanation is nearly cooked…",
+];
 
 const Premium = () => {
   const { user, loading, isPremium, profileLoading } = useAuth();
@@ -46,6 +48,8 @@ const Premium = () => {
   const [requestId, setRequestId] = useState<string | null>(null);
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cookingIdx, setCookingIdx] = useState(0);
+  const cookingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
 
@@ -56,6 +60,10 @@ const Premium = () => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
+    }
+    if (cookingRef.current) {
+      clearInterval(cookingRef.current);
+      cookingRef.current = null;
     }
   }, []);
 
@@ -138,6 +146,10 @@ const Premium = () => {
     setRequestId(null);
     setCurrentStatus(null);
     setErrorMessage(null);
+    setCookingIdx(0);
+    cookingRef.current = setInterval(() => {
+      setCookingIdx((prev) => (prev + 1) % COOKING_MESSAGES.length);
+    }, 5000);
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-video", {
@@ -193,11 +205,6 @@ const Premium = () => {
 
   if (!user) return <Navigate to="/login" replace />;
   if (!isPremium) return <Navigate to="/concepts" replace />;
-
-  // Compute current step index for the real pipeline
-  const currentStepIndex = currentStatus
-    ? STATUS_STEPS.findIndex((s) => s.status === currentStatus)
-    : -1;
 
   // ── PREMIUM USER LAYOUT ──
   return (
@@ -339,45 +346,29 @@ const Premium = () => {
               className="inline-flex h-12 items-center gap-2 rounded-xl bg-accent px-8 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:shadow-none"
             >
               {generating && <Loader2 className="h-4 w-4 animate-spin" />}
-              {generating ? "Generating…" : "Generate Video"}
+              {generating ? "Cooking…" : "Generate Video"}
             </button>
+          </div>
 
-            {generating && (
+          {/* Fun cooking loading screen */}
+          {generating && (
+            <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border bg-card p-12 text-center">
+              <div className="relative mb-6">
+                <div className="h-16 w-16 animate-spin rounded-full border-4 border-muted border-t-accent" />
+                <span className="absolute inset-0 flex items-center justify-center text-2xl">🧑‍🍳</span>
+              </div>
+              <p className="text-lg font-semibold text-foreground transition-all duration-500">
+                {COOKING_MESSAGES[cookingIdx]}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This usually takes 2–4 minutes. Grab a coffee ☕
+              </p>
               <button
                 onClick={handleCancel}
-                className="inline-flex h-12 items-center gap-2 rounded-xl border px-5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="mt-6 inline-flex h-10 items-center gap-2 rounded-xl border px-5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
                 <X className="h-4 w-4" /> Cancel
               </button>
-            )}
-          </div>
-
-          {/* Real-time progress steps */}
-          {generating && currentStatus && (
-            <div className="mt-6 space-y-3 rounded-xl border bg-card p-6">
-              {STATUS_STEPS.map((step, i) => {
-                const done = i < currentStepIndex || currentStatus === "completed";
-                const active = i === currentStepIndex && currentStatus !== "completed" && currentStatus !== "failed";
-                const upcoming = i > currentStepIndex;
-                return (
-                  <div key={step.status} className="flex items-center gap-3">
-                    {done ? (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent">
-                        <Check className="h-3.5 w-3.5 text-accent-foreground" />
-                      </div>
-                    ) : active ? (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-accent">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
-                      </div>
-                    ) : (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-muted" />
-                    )}
-                    <span className={`text-sm ${done ? "font-medium" : active ? "text-foreground" : "text-muted-foreground"}`}>
-                      {step.label}
-                    </span>
-                  </div>
-                );
-              })}
             </div>
           )}
 
