@@ -8,7 +8,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    gemini_api_key: str = ""
+    gemini_api_key: str = ""  # unused, kept for backward compat with existing .env files
     mistral_api_key: str = ""
     github_token: str = ""
 
@@ -23,8 +23,7 @@ class Settings(BaseSettings):
 
     @property
     def llm_provider(self) -> str:
-        """Gemini preferred; falls back to Mistral if no Gemini key."""
-        return "gemini" if self.gemini_api_key else "mistral"
+        return "mistral"
 
 
 settings = Settings()

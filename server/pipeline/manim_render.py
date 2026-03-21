@@ -18,6 +18,7 @@ async def render_manim(
     script_str: str | None = None,
     script_path: Path | None = None,
     scene_class: str = "GeneratedScene",
+    output_name: str = "animation",
 ) -> Path:
     """
     Render a Manim scene and return the path to animation.mp4.
@@ -45,7 +46,7 @@ async def render_manim(
         cmd = [
             sys.executable, "-m", "manim",
             "-ql",
-            "--output_file", "animation",
+            "--output_file", output_name,
             "--media_dir", str(media_dir),
             str(target),
             scene_class,
@@ -64,13 +65,15 @@ async def render_manim(
                 f"{stderr.decode()[-2000:]}"
             )
 
-        # Locate output: manim puts it at media_dir/videos/<stem>/<quality>/animation.mp4
+        # Locate output
         stem = target.stem
-        matches = list(media_dir.rglob(f"videos/{stem}/*/animation.mp4"))
+        matches = list(media_dir.rglob(f"videos/{stem}/*/{output_name}.mp4"))
         if not matches:
-            matches = list(media_dir.rglob("animation.mp4"))
+            matches = list(media_dir.rglob(f"{output_name}.mp4"))
         if not matches:
-            raise FileNotFoundError("Manim output animation.mp4 not found after render")
+            matches = list(media_dir.rglob("*.mp4"))
+        if not matches:
+            raise FileNotFoundError("Manim output not found after render")
 
         return max(matches, key=os.path.getmtime)
 

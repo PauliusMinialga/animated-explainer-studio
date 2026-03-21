@@ -14,50 +14,23 @@ import logging
 import re
 from dataclasses import dataclass
 from config import settings
-from .graph_renderer import render_graph_to_manim
+from .graph_renderer import render_phase_to_manim
 
 logger = logging.getLogger(__name__)
 
 
-# ── LLM client (Gemini preferred, Mistral fallback) ───────────────────────────
+# ── LLM client (Mistral) ──────────────────────────────────────────────────────
 
 def _chat(system: str, user: str, temperature: float = 0.4) -> str:
-    """Send a chat completion and return the response text.
-
-    Uses Gemini Flash 2.0 if GEMINI_API_KEY is set, otherwise Mistral Small.
-    If Gemini quota is exhausted, automatically falls back to Mistral.
-    """
+    """Send a chat completion via Mistral and return the response text."""
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": user})
 
-    if settings.llm_provider == "gemini":
-        from openai import OpenAI
-        client = OpenAI(
-            api_key=settings.gemini_api_key,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        )
-        for model in ("gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash-latest"):
-            try:
-                resp = client.chat.completions.create(
-                    model=model, messages=messages, temperature=temperature,
-                )
-                logger.info("LLM: Gemini/%s", model)
-                return resp.choices[0].message.content.strip()
-            except Exception as exc:
-                if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc) or "404" in str(exc):
-                    logger.warning("Gemini %s unavailable, trying next", model)
-                    continue
-                raise
-        if not settings.mistral_api_key:
-            raise RuntimeError("All Gemini models quota-exhausted and no MISTRAL_API_KEY set")
-        logger.warning("All Gemini models exhausted — falling back to Mistral")
-
-    # Mistral path (primary if no Gemini key, fallback if Gemini exhausted)
     from mistralai.client import Mistral
     if not settings.mistral_api_key:
-        raise RuntimeError("No LLM key set — add GEMINI_API_KEY or MISTRAL_API_KEY to .env")
+        raise RuntimeError("No LLM key set — add MISTRAL_API_KEY to .env")
     client = Mistral(api_key=settings.mistral_api_key)
     resp = client.chat.complete(model="mistral-small-latest", messages=messages)
     logger.info("LLM: Mistral/mistral-small-latest")
@@ -180,14 +153,14 @@ the data/call-flow edges between them.
 Return ONLY a valid JSON object — no markdown fences, no explanation:
 {{
   "nodes": [
-    {{"id": "snake_case_id", "label": "Short Label\\n(role)"}}
+    {{"id": "snake_case_id", "label": "Short Label"}}
   ],
   "edges": [
     {{"from": "node_id", "to": "node_id"}}
   ],
   "tts": {{
     "intro": "1 sentence: what this repo does",
-    "info": "4-6 sentences narrated DURING the animation. Write them in the order components appear on screen: (1) introduce the repo, (2) describe each component as it appears, (3) explain the data/call flow connections between them",
+    "info": "5-8 sentences narrated DURING the animation. Describe each component and the flow between them in plain language, suitable for a beginner.",
     "outro": "1 sentence: key architectural pattern or takeaway"
   }}
 }}
@@ -196,9 +169,43 @@ Rules:
 - Do NOT include the repository itself as a node (it will be the central node automatically)
 - 5–8 nodes total
 - Edges show data/call flow, not directory nesting
-- Labels: max 2 lines, ~12 chars per line, use \\n for line break
+- Labels: max 15 chars, no line breaks
 - Return ONLY the raw JSON object, nothing else
 """
+
+_PHASE_SPLITTER_PROMPT = """\
+You are given a component graph for a software repository.
+Split the nodes and edges into 2–4 logical animation phases.
+
+Each phase focuses on one concern or layer (e.g. "Core", "Data Layer", "User Interaction").
+The central repo node "{repo_name}" appears in ALL phases as the anchor.
+
+Rules:
+- 2–4 phases total, prefer 3
+- Every non-central node must appear in exactly ONE phase
+- A phase edge is only valid if BOTH its endpoints appear in that phase (or are the central node)
+- Each phase title is 2–3 words
+- Do not include edges that cross phases
+
+Input graph:
+{graph_json}
+
+Return ONLY valid JSON — no markdown, no explanation:
+{{
+  "phases": [
+    {{
+      "title": "Phase title",
+      "node_ids": ["id1", "id2"],
+      "edges": [{{"from": "id1", "to": "id2"}}]
+    }}
+  ]
+}}
+"""
+
+
+def _strip_json(raw: str) -> str:
+    raw = re.sub(r"^```[a-z]*\n?", "", raw)
+    return re.sub(r"\n?```$", "", raw.strip())
 
 
 def generate_repo_scripts(
@@ -206,52 +213,89 @@ def generate_repo_scripts(
     repo_content: str,
     mood: str = "friendly",
     level: str = "beginner",
-) -> tuple[str, TTSScript]:
+) -> tuple[list[str], TTSScript]:
     """
-    Given a pre-fetched repo summary, ask the LLM for a JSON component graph,
-    then render the Manim script deterministically.
+    Two-step LLM pipeline:
+      1. Get the full component graph (nodes, edges, tts)
+      2. Split the graph into logical phases
 
-    Returns (manim_script: str, tts: TTSScript).
+    Returns (manim_scripts: list[str], tts: TTSScript) — one script per phase.
     """
     m = re.search(r"github\.com/[^/]+/([^/\s]+)", url)
     repo_name = m.group(1) if m else url.rstrip("/").split("/")[-1]
 
-    prompt = _REPO_GRAPH_PROMPT.format(
-        repo_summary=repo_content,
-        mood=mood,
-        level=level,
-    )
-
-    logger.info("Calling LLM via %s for repo graph JSON", settings.llm_provider)
-    raw = _chat(
+    # ── Step 1: full graph ────────────────────────────────────────────────────
+    logger.info("[repo-scripts] Step 1: generating component graph")
+    raw_graph = _chat(
         system="You are a technical analyst. Return only valid JSON, no markdown.",
-        user=prompt,
+        user=_REPO_GRAPH_PROMPT.format(repo_summary=repo_content, mood=mood, level=level),
         temperature=0.3,
     )
-
-    # Strip markdown code fences just in case
-    raw = re.sub(r"^```[a-z]*\n?", "", raw)
-    raw = re.sub(r"\n?```$", "", raw.strip())
-
     try:
-        data = json.loads(raw)
+        data = json.loads(_strip_json(raw_graph))
     except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"LLM returned invalid JSON: {exc}\n\nRaw output:\n{raw[:400]}"
-        ) from exc
+        raise ValueError(f"Step 1 LLM returned invalid JSON: {exc}\n\n{raw_graph[:400]}") from exc
 
-    nodes = data.get("nodes", [])
-    edges = data.get("edges", [])
-    tts_data = data.get("tts", {})
-
-    manim_script = render_graph_to_manim(repo_name, nodes, edges, tts_info=tts_data.get("info", ""))
+    nodes: list[dict] = data.get("nodes", [])
+    edges: list[dict] = data.get("edges", [])
+    tts_data: dict = data.get("tts", {})
     tts = TTSScript(
         intro=tts_data.get("intro", ""),
         info=tts_data.get("info", ""),
         outro=tts_data.get("outro", ""),
     )
 
-    return manim_script, tts
+    # ── Step 2: phase splitter ────────────────────────────────────────────────
+    logger.info("[repo-scripts] Step 2: splitting into phases")
+    raw_phases = _chat(
+        system="You are a technical animator. Return only valid JSON, no markdown.",
+        user=_PHASE_SPLITTER_PROMPT.format(
+            repo_name=repo_name,
+            graph_json=json.dumps({"nodes": nodes, "edges": edges}, indent=2),
+        ),
+        temperature=0.2,
+    )
+    try:
+        phases_data: list[dict] = json.loads(_strip_json(raw_phases)).get("phases", [])
+    except json.JSONDecodeError as exc:
+        logger.warning("Phase splitter returned invalid JSON, falling back to single phase: %s", exc)
+        phases_data = [{"title": repo_name, "node_ids": [n["id"] for n in nodes], "edges": edges}]
+
+    if not phases_data:
+        phases_data = [{"title": repo_name, "node_ids": [n["id"] for n in nodes], "edges": edges}]
+
+    # ── Build per-phase Manim scripts ─────────────────────────────────────────
+    node_map = {n["id"]: n for n in nodes}
+    total_phases = len(phases_data)
+    # Spread TTS timing evenly across phases
+    words_per_phase = max(10, len(tts.info.split()) // total_phases)
+    phase_narration = " ".join(tts.info.split()[:words_per_phase * 2])  # rough estimate
+
+    manim_scripts = []
+    for i, phase in enumerate(phases_data):
+        phase_node_ids: list[str] = phase.get("node_ids", [])
+        phase_nodes = [node_map[nid] for nid in phase_node_ids if nid in node_map]
+        valid_ids = set(phase_node_ids) | {"center"}
+        phase_edges = [
+            e for e in phase.get("edges", [])
+            if e.get("from") in valid_ids and e.get("to") in valid_ids
+        ]
+        script = render_phase_to_manim(
+            repo_name=repo_name,
+            phase_num=i + 1,
+            total_phases=total_phases,
+            phase_title=phase.get("title", f"Part {i + 1}"),
+            nodes=phase_nodes,
+            edges=phase_edges,
+            tts_info=phase_narration,
+        )
+        manim_scripts.append(script)
+        logger.info(
+            "[repo-scripts] Phase %d/%d — '%s' — %d nodes, %d edges",
+            i + 1, total_phases, phase.get("title"), len(phase_nodes), len(phase_edges),
+        )
+
+    return manim_scripts, tts
 
 
 def generate_scripts(

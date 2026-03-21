@@ -14,10 +14,13 @@ import asyncio
 import json
 import logging
 import shutil
+import subprocess
+import tempfile
 import uuid
+from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from models import GenerateRequest, JobResponse, JobStatus, TTSScriptResponse
 from pipeline.enrich import enrich_prompt, ingest_github_repo
@@ -39,14 +42,47 @@ def _set(job_id: str, **kwargs):
     _jobs[job_id].update(kwargs)
 
 
+def _concat_phases(phase_paths: list[Path], out_path: Path) -> None:
+    """ffmpeg concat multiple phase mp4s into one animation.mp4."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+        for p in phase_paths:
+            f.write(f"file '{p}'\n")
+        concat_list = f.name
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                concat_list,
+                "-c",
+                "copy",
+                str(out_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        Path(concat_list).unlink(missing_ok=True)
+
+
 @router.post("/generate", response_model=JobResponse, status_code=202)
-async def generate(req: GenerateRequest, background_tasks: BackgroundTasks):
+async def generate(
+    req: GenerateRequest, background_tasks: BackgroundTasks, request: Request
+):
     # Added prints for debugging as requested
-    print(f"\n🚀 [generate] RECEIVED REQUEST: {req.model_dump_json(indent=2) if hasattr(req, 'model_dump_json') else req}")
+    print(
+        f"\n🚀 [generate] RECEIVED REQUEST: {req.model_dump_json(indent=2) if hasattr(req, 'model_dump_json') else req}"
+    )
     logger.info("[%s] Incoming generate request: %s", "NEW", req)
-    
+
     try:
         job_id = str(uuid.uuid4())
+        base_url = str(request.base_url).rstrip("/")
         _jobs[job_id] = {
             "status": JobStatus.pending,
             "progress": "Queued",
@@ -55,8 +91,7 @@ async def generate(req: GenerateRequest, background_tasks: BackgroundTasks):
             "tts_script": None,
             "error": None,
         }
-        background_tasks.add_task(_run_pipeline, job_id, req)
-        return JobResponse(job_id=job_id, status=JobStatus.pending, progress="Queued")
+        background_tasks.add_task(_run_pipeline, job_id, req, base_url)
     except Exception as e:
         print(f"❌ [generate] FAILED to initialize job: {e}")
         logger.exception("Generate route error")
@@ -71,7 +106,9 @@ async def get_job(job_id: str):
     return JobResponse(job_id=job_id, **job)
 
 
-async def _run_pipeline(job_id: str, req: GenerateRequest):
+async def _run_pipeline(
+    job_id: str, req: GenerateRequest, base_url: str = "http://localhost:8000"
+):
     try:
         out_dir = job_dir(job_id)
         is_github_url = req.prompt.strip().startswith("https://github.com/")
@@ -92,7 +129,7 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             logger.info("[%s] Repo ingested — %d chars", job_id, len(repo_content))
 
             _set(job_id, progress="Generating repo scripts…")
-            manim_script, tts = generate_repo_scripts(
+            manim_scripts, tts = generate_repo_scripts(
                 url=req.prompt.strip(),
                 repo_content=repo_content,
                 mood=req.mood,
@@ -109,45 +146,59 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
                 level=req.level,
                 mood=req.mood,
             )
-            manim_script = scripts["manim_script"]
+            manim_scripts = [scripts["manim_script"]]
             tts = scripts["tts_script"]
 
-        logger.info(
-            "[%s] ── MANIM SCRIPT ──────────────────────────────────\n%s\n"
-            "─────────────────────────────────────────────────────",
-            job_id, manim_script,
-        )
         logger.info(
             "[%s] ── TTS SCRIPT ───────────────────────────────────\n"
             "  INTRO: %s\n  INFO:  %s\n  OUTRO: %s\n"
             "─────────────────────────────────────────────────────",
-            job_id, tts.intro, tts.info, tts.outro,
+            job_id,
+            tts.intro,
+            tts.info,
+            tts.outro,
         )
 
-        # Persist raw artefacts for debugging
-        (out_dir / "manim_script.py").write_text(manim_script, encoding="utf-8")
+        # Persist artefacts
         (out_dir / "tts_script.json").write_text(
-            json.dumps({"intro": tts.intro, "info": tts.info, "outro": tts.outro}, indent=2),
+            json.dumps(
+                {"intro": tts.intro, "info": tts.info, "outro": tts.outro}, indent=2
+            ),
             encoding="utf-8",
         )
+        for i, ms in enumerate(manim_scripts):
+            logger.info("[%s] ── PHASE %d SCRIPT ──\n%s\n──────────", job_id, i + 1, ms)
+            (out_dir / f"manim_phase_{i}.py").write_text(ms, encoding="utf-8")
 
-        _set(job_id, progress="Rendering animation…")
-        animation_path = await render_manim(
-            out_dir,
-            script_str=manim_script,
-            scene_class="GeneratedScene",
-        )
+        # ── Render each phase ─────────────────────────────────────────────────
+        phase_paths: list[Path] = []
+        for i, script in enumerate(manim_scripts):
+            _set(job_id, progress=f"Rendering phase {i + 1}/{len(manim_scripts)}…")
+            p = await render_manim(
+                out_dir,
+                script_str=script,
+                scene_class="GeneratedScene",
+                output_name=f"phase_{i}",
+            )
+            phase_paths.append(p)
+
+        # ── Concat phases → animation.mp4 ─────────────────────────────────────
         final_animation = out_dir / "animation.mp4"
-        if animation_path != final_animation:
-            shutil.copy2(animation_path, final_animation)
+        if len(phase_paths) == 1:
+            shutil.copy2(phase_paths[0], final_animation)
+        else:
+            _set(job_id, progress="Concatenating phases…")
+            await asyncio.to_thread(_concat_phases, phase_paths, final_animation)
 
-        tts_response = TTSScriptResponse(intro=tts.intro, info=tts.info, outro=tts.outro)
+        tts_response = TTSScriptResponse(
+            intro=tts.intro, info=tts.info, outro=tts.outro
+        )
 
         # Mark animation ready — frontend can show it while VEED processes
         _set(
             job_id,
             progress="Generating avatar & voice…",
-            animation_url=f"/files/{job_id}/animation.mp4",
+            animation_url=f"{base_url}/files/{job_id}/animation.mp4",
             tts_script=tts_response,
         )
 
@@ -171,7 +222,7 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
                 outro_path=veed.outro_video,
                 out_path=final_path,
             )
-            _set(job_id, final_url=f"/files/{job_id}/final.mp4")
+            _set(job_id, final_url=f"{base_url}/files/{job_id}/final.mp4")
 
         _set(job_id, status=JobStatus.done, progress="Done")
 
@@ -184,4 +235,3 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
         logger.exception("[%s] Pipeline failed", job_id)
         _set(job_id, status=JobStatus.failed, progress="Failed", error=str(exc))
         raise
-
