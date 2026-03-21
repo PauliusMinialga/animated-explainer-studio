@@ -405,25 +405,14 @@ const Premium = () => {
             {mode === "concept" ? (
               <>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">Concept</label>
-                  <p className="mb-2 text-xs text-muted-foreground">Describe an idea or algorithm you want explained visually.</p>
+                  <label className="mb-1.5 block text-sm font-medium">Prompt</label>
+                  <p className="mb-2 text-xs text-muted-foreground">Describe a concept and optionally include code — we'll animate both.</p>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    rows={3}
+                    rows={6}
                     className="flex w-full rounded-xl border bg-card px-4 py-3 font-mono text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
-                    placeholder="e.g. 'Explain how recursion works with a visual tree diagram'"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Code <span className="text-muted-foreground font-normal">(optional)</span></label>
-                  <p className="mb-2 text-xs text-muted-foreground">Paste a snippet to be animated alongside the concept.</p>
-                  <textarea
-                    value={codeSnippet}
-                    onChange={(e) => setCodeSnippet(e.target.value)}
-                    rows={4}
-                    className="flex w-full rounded-xl border bg-card px-4 py-3 font-mono text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
-                    placeholder={"def factorial(n):\n    if n <= 1: return 1\n    return n * factorial(n - 1)"}
+                    placeholder={"Explain how recursion works with a visual tree diagram\n\ndef factorial(n):\n    if n <= 1: return 1\n    return n * factorial(n - 1)"}
                   />
                 </div>
                 <div>
