@@ -1,5 +1,0 @@
-{
-  "intro": "This repo renders 3D wireframe landscapes from .fdf files using pure C and MinilibX.",
-  "info": "The parser reads .fdf files into terrain data, which the core processes. The renderer draws the wireframe using MinilibX for window/pixel control. User controls adjust zoom, rotation, and color via the controls module, while color_manager handles palette switching. Maps provide test terrain files.",
-  "outro": "The project follows a clear data flow: parse \u2192 process \u2192 render \u2192 display, with user input modifying the output dynamically."
-}

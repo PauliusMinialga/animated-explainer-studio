@@ -10,6 +10,9 @@ manim-env/
 media/
 animations/
 
+# Generated job output (runtime artifacts — never commit)
+output/
+
 # OS
 .DS_Store
 
