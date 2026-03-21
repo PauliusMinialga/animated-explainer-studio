@@ -6,7 +6,8 @@ import { useAuth } from "@/hooks/useAuth";
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, isPremium, signOut } = useAuth();
+  const homeRoute = isPremium ? "/premium" : "/";
 
   const handleLogout = async () => {
     await signOut();
