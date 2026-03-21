@@ -2,8 +2,9 @@
   "name": "codeviz",
   "private": true,
   "scripts": {
-    "dev": "cd client && bun run dev",
-    "build": "cd client && bun run build",
-    "preview": "cd client && bun run preview"
+    "dev": "cd client && npx vite",
+    "build": "cd client && npx vite build",
+    "preview": "cd client && npx vite preview",
+    "install:client": "cd client && npm install"
   }
 }
