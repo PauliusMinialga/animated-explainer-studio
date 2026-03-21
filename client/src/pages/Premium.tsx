@@ -48,8 +48,9 @@ const Premium = () => {
   const [prompt, setPrompt] = useState("");
   const [url, setUrl] = useState("");
 
-  // Free user: premade selection
   const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
+  const [selectedPremadeFile, setSelectedPremadeFile] = useState<string | null>(null);
+  const [browserOpen, setBrowserOpen] = useState(false);
 
   // Generation state
   const [generating, setGenerating] = useState(false);
