@@ -66,7 +66,8 @@ const Premium = () => {
     if (!selectedPremade || generating) return;
     const list = mode === "code" ? premadeCode : premadeConcepts;
     const item = list.find((c) => c.id === selectedPremade);
-    if (!item) return;
+    const file = item?.file ?? selectedPremadeFile;
+    if (!file) return;
 
     setGenerating(true);
     setVideoUrl(null);
