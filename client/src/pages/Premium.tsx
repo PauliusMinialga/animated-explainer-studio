@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Crown, Download, Loader2, Play } from "lucide-react";
+import { Check, ChevronDown, Crown, Download, Loader2, Play } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import AlgorithmBrowser, { type AlgorithmItem } from "@/components/AlgorithmBrowser";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -47,8 +48,9 @@ const Premium = () => {
   const [prompt, setPrompt] = useState("");
   const [url, setUrl] = useState("");
 
-  // Free user: premade selection
   const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
+  const [selectedPremadeFile, setSelectedPremadeFile] = useState<string | null>(null);
+  const [browserOpen, setBrowserOpen] = useState(false);
 
   // Generation state
   const [generating, setGenerating] = useState(false);
@@ -64,7 +66,8 @@ const Premium = () => {
     if (!selectedPremade || generating) return;
     const list = mode === "code" ? premadeCode : premadeConcepts;
     const item = list.find((c) => c.id === selectedPremade);
-    if (!item) return;
+    const file = item?.file ?? selectedPremadeFile;
+    if (!file) return;
 
     setGenerating(true);
     setVideoUrl(null);
@@ -82,12 +85,17 @@ const Premium = () => {
     const finalTimer = setTimeout(() => {
       setGenerating(false);
       setFakeStep(FAKE_STEPS.length);
-      setVideoUrl(item.file);
+      setVideoUrl(file);
     }, FAKE_STEPS.length * 1200 + 800);
     timerRef.current.push(finalTimer);
   };
 
-  // ── Premium user: real request ──
+  const handleBrowserSelect = (item: AlgorithmItem) => {
+    setSelectedPremade(item.id);
+    setSelectedPremadeFile(item.file);
+  };
+
+
   const handlePremiumGenerate = async () => {
     if (!prompt.trim() || generating) return;
 
@@ -240,7 +248,28 @@ const Premium = () => {
             ))}
           </div>
 
-          {/* Generate button */}
+          {/* Selected from browser (if not in default list) */}
+          {selectedPremade && !activePremadeList.find((i) => i.id === selectedPremade) && (
+            <div className="mt-3 flex items-center gap-3 rounded-2xl border-2 border-accent bg-accent/10 p-4 shadow-md shadow-accent/10">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                <Play className="h-4 w-4" />
+              </div>
+              <span className="text-sm font-semibold">{selectedPremade.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+              <Check className="ml-auto h-5 w-5 text-accent" />
+            </div>
+          )}
+
+          {/* See more button */}
+          <button
+            onClick={() => setBrowserOpen(true)}
+            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent/80"
+          >
+            See more <ChevronDown className="h-4 w-4" />
+          </button>
+
+          {/* Algorithm browser dialog */}
+          <AlgorithmBrowser open={browserOpen} onClose={() => setBrowserOpen(false)} onSelect={handleBrowserSelect} />
+
           <div className="mt-8">
             <button
               onClick={handleFreeGenerate}
