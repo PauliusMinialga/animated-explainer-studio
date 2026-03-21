@@ -32,6 +32,7 @@ from pipeline.repo_storyboard import generate_storyboard
 from pipeline.repo_narration import assemble_narration, narration_to_tts_info
 from database import job_dir
 from config import settings
+from supabase_client import update_request_status
 
 logger = logging.getLogger(__name__)
 
@@ -73,20 +74,32 @@ async def get_job(job_id: str):
 
 
 async def _run_pipeline(job_id: str, req: GenerateRequest, base_url: str = "http://localhost:8000"):
+    rid = req.request_id  # Supabase video_requests row ID (may be None)
     try:
         out_dir = job_dir(job_id)
         is_github_url = req.prompt.strip().startswith("https://github.com/")
+
+        if rid:
+            update_request_status(rid, "processing")
 
         if is_github_url:
             await _run_repo_pipeline(job_id, req, out_dir, base_url)
         else:
             await _run_code_pipeline(job_id, req, out_dir, base_url)
 
+        if rid:
+            video_url = _jobs[job_id].get("final_url")
+            update_request_status(rid, "completed", video_url=video_url)
+
     except HTTPException as exc:
         _set(job_id, status=JobStatus.failed, progress="Failed", error=exc.detail)
+        if rid:
+            update_request_status(rid, "failed", error=exc.detail)
         raise
     except Exception as exc:
         _set(job_id, status=JobStatus.failed, progress="Failed", error=str(exc))
+        if rid:
+            update_request_status(rid, "failed", error=str(exc))
         raise
 
 

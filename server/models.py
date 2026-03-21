@@ -32,6 +32,7 @@ class GenerateRequest(BaseModel):
     mode: Mode = Mode.concept
     level: Level = Level.beginner
     mood: Mood = Mood.friendly
+    request_id: Optional[str] = None  # Supabase video_requests row ID from edge function
 
 
 class TTSScriptResponse(BaseModel):
