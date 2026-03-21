@@ -9,11 +9,59 @@ The intro and outro are spoken by the avatar (on-screen talking head).
 The info part is the voiceover narrated during the Manim animation.
 """
 
+import json
+import logging
 import re
-from dataclasses import dataclass, asdict
-from mistralai.client import Mistral
+from dataclasses import dataclass
 from config import settings
+from .graph_renderer import render_graph_to_manim
 
+logger = logging.getLogger(__name__)
+
+
+# ── LLM client (Gemini preferred, Mistral fallback) ───────────────────────────
+
+def _chat(system: str, user: str, temperature: float = 0.4) -> str:
+    """Send a chat completion and return the response text.
+
+    Uses Gemini Flash 2.0 if GEMINI_API_KEY is set, otherwise Mistral Small.
+    If Gemini quota is exhausted, automatically falls back to Mistral.
+    """
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": user})
+
+    if settings.llm_provider == "gemini":
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=settings.gemini_api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+        for model in ("gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash-latest"):
+            try:
+                resp = client.chat.completions.create(
+                    model=model, messages=messages, temperature=temperature,
+                )
+                logger.info("LLM: Gemini/%s", model)
+                return resp.choices[0].message.content.strip()
+            except Exception as exc:
+                if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc) or "404" in str(exc):
+                    logger.warning("Gemini %s unavailable, trying next", model)
+                    continue
+                raise
+        if not settings.mistral_api_key:
+            raise RuntimeError("All Gemini models quota-exhausted and no MISTRAL_API_KEY set")
+        logger.warning("All Gemini models exhausted — falling back to Mistral")
+
+    # Mistral path (primary if no Gemini key, fallback if Gemini exhausted)
+    from mistralai.client import Mistral
+    if not settings.mistral_api_key:
+        raise RuntimeError("No LLM key set — add GEMINI_API_KEY or MISTRAL_API_KEY to .env")
+    client = Mistral(api_key=settings.mistral_api_key)
+    resp = client.chat.complete(model="mistral-small-latest", messages=messages)
+    logger.info("LLM: Mistral/mistral-small-latest")
+    return resp.choices[0].message.content.strip()
 
 @dataclass
 class TTSScript:
@@ -120,88 +168,37 @@ def _parse(content: str) -> dict:
     }
 
 
-_REPO_PROMPT_TEMPLATE = """\
-You are generating a Manim animation script for a short educational video about a GitHub repository.
-The viewer is a {level} developer. Tone: {mood}.
+_REPO_GRAPH_PROMPT = """\
+You are analyzing a GitHub repository to produce a mind-map animation graph.
+The target audience is a {level} developer. Tone: {mood}.
 
-Here is the repository content:
-{repo_content}
+{repo_summary}
 
-─── ANIMATION STYLE: MIND MAP ───────────────────────────────────────────────
-Create a mind map animation. Layout rules:
-1. One central node (repo name) placed at ORIGIN using .move_to(ORIGIN)
-2. 4–6 component nodes placed RADIALLY around the center using explicit coordinates:
-   - Use .move_to(direction * distance) where direction is UP, DOWN, LEFT, RIGHT,
-     UR, UL, DR, DL and distance is 2.5–3.5
-   - Each node is a Rectangle with a Text label inside, grouped as VGroup(rect, label)
-3. Arrows from center to each component node (CurvedArrow or Arrow)
-4. For key interactions between components, add arrows BETWEEN component nodes too
-5. Animate in this order:
-   a. FadeIn the central node
-   b. Create each component node one by one with a short self.wait(0.3) between each
-   c. GrowArrow each connection from center outward
-   d. GrowArrow the inter-component connections, highlighting the main data flow
-   e. End with self.wait(2)
+Identify 5–8 key components (modules, directories, services, key files) and \
+the data/call-flow edges between them.
 
-─── STRICT MANIM RULES (violations will crash the render) ────────────────────
-- Scene class MUST be named exactly `GeneratedScene`
-- Import only: `from manim import *`
-- Do NOT use MathTex, Tex, Code(), BulletedList(), or any LaTeX
-- Use Text() for all labels (font_size 20–28)
-- Rectangle nodes: width=2.2, height=0.9, use fill_opacity=0.8
-- NEVER use .arrange() for the mind map nodes — position each one with .move_to()
-- SurroundingRectangle only accepts a single Mobject — wrap slices with VGroup(*...)
-- Target 25–35 seconds total runtime
+Return ONLY a valid JSON object — no markdown fences, no explanation:
+{{
+  "nodes": [
+    {{"id": "snake_case_id", "label": "Short Label\\n(role)"}}
+  ],
+  "edges": [
+    {{"from": "node_id", "to": "node_id"}}
+  ],
+  "tts": {{
+    "intro": "1 sentence: what this repo does",
+    "info": "3–4 sentences about the main components and how they interact",
+    "outro": "1 sentence: key architectural pattern or takeaway"
+  }}
+}}
 
-CRITICAL — ARROW ANIMATIONS (read carefully):
-- Arrow and CurvedArrow are MOBJECTS (shapes). Create them as variables first:
-    arrow = Arrow(start=..., end=..., buff=0.2)
-    curved = CurvedArrow(start_point=..., end_point=..., angle=PI/4)
-- To animate an arrow appearing, use GrowArrow inside self.play():
-    self.play(GrowArrow(arrow))       ← CORRECT
-- NEVER wrap GrowArrow inside Create():
-    self.play(Create(GrowArrow(...))) ← WILL CRASH — GrowArrow is already an animation
-    self.play(Create(arrow))          ← WILL CRASH — Arrow is not a VMobject
-- CurvedArrow: use self.play(Create(curved)) — CurvedArrow IS a VMobject
-- Allowed objects: Text, VGroup, Arrow, CurvedArrow, Rectangle, Circle, Line,
-  Dot, FadeIn, FadeOut, Write, GrowArrow, Create (only for VMobjects like Rectangle/Text/CurvedArrow)
-
-─── OUTPUT FORMAT (return EXACTLY this, no extra text) ───────────────────────
-
---- MANIM_SCRIPT ---
-[the complete Python script]
-
---- TTS_INTRO ---
-[1 sentence: what this repo does]
-
---- TTS_INFO ---
-[3-4 sentences, {mood} tone: main components, what each does,
- how they connect — follow the actual data/call flow in the code]
-
---- TTS_OUTRO ---
-[1 sentence: key architectural pattern or takeaway]
+Rules:
+- Do NOT include the repository itself as a node (it will be the central node automatically)
+- 5–8 nodes total
+- Edges show data/call flow, not directory nesting
+- Labels: max 2 lines, ~12 chars per line, use \\n for line break
+- Return ONLY the raw JSON object, nothing else
 """
-
-_REPO_SECTION_RE = re.compile(
-    r"---\s*MANIM_SCRIPT\s*---\s*(.*?)\s*"
-    r"---\s*TTS_INTRO\s*---\s*(.*?)\s*"
-    r"---\s*TTS_INFO\s*---\s*(.*?)\s*"
-    r"---\s*TTS_OUTRO\s*---\s*(.*?)(?:\s*---|$)",
-    re.DOTALL,
-)
-
-
-def _parse_repo_response(content: str) -> tuple[str, TTSScript]:
-    m = _REPO_SECTION_RE.search(content)
-    if not m:
-        raise ValueError(
-            f"Repo response missing expected sections.\nPreview:\n{content[:600]}"
-        )
-    manim_script = m.group(1).strip()
-    intro = m.group(2).strip()
-    info = m.group(3).strip()
-    outro = m.group(4).strip()
-    return manim_script, TTSScript(intro=intro, info=info, outro=outro)
 
 
 def generate_repo_scripts(
@@ -211,26 +208,50 @@ def generate_repo_scripts(
     level: str = "beginner",
 ) -> tuple[str, TTSScript]:
     """
-    Given pre-fetched repo content, generate a Manim script + TTSScript.
+    Given a pre-fetched repo summary, ask the LLM for a JSON component graph,
+    then render the Manim script deterministically.
 
     Returns (manim_script: str, tts: TTSScript).
-    Caller is responsible for fetching repo_content via ingest_github_repo().
     """
-    if not settings.mistral_api_key:
-        raise RuntimeError("MISTRAL_API_KEY is not set")
+    m = re.search(r"github\.com/[^/]+/([^/\s]+)", url)
+    repo_name = m.group(1) if m else url.rstrip("/").split("/")[-1]
 
-    user_prompt = _REPO_PROMPT_TEMPLATE.format(
-        repo_content=repo_content,
+    prompt = _REPO_GRAPH_PROMPT.format(
+        repo_summary=repo_content,
         mood=mood,
         level=level,
     )
 
-    client = Mistral(api_key=settings.mistral_api_key)
-    response = client.chat.complete(
-        model="mistral-small-latest",
-        messages=[{"role": "user", "content": user_prompt}],
+    logger.info("Calling LLM via %s for repo graph JSON", settings.llm_provider)
+    raw = _chat(
+        system="You are a technical analyst. Return only valid JSON, no markdown.",
+        user=prompt,
+        temperature=0.3,
     )
-    return _parse_repo_response(response.choices[0].message.content)
+
+    # Strip markdown code fences just in case
+    raw = re.sub(r"^```[a-z]*\n?", "", raw)
+    raw = re.sub(r"\n?```$", "", raw.strip())
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"LLM returned invalid JSON: {exc}\n\nRaw output:\n{raw[:400]}"
+        ) from exc
+
+    nodes = data.get("nodes", [])
+    edges = data.get("edges", [])
+    tts_data = data.get("tts", {})
+
+    manim_script = render_graph_to_manim(repo_name, nodes, edges)
+    tts = TTSScript(
+        intro=tts_data.get("intro", ""),
+        info=tts_data.get("info", ""),
+        outro=tts_data.get("outro", ""),
+    )
+
+    return manim_script, tts
 
 
 def generate_scripts(
@@ -240,15 +261,10 @@ def generate_scripts(
     mood: str = "friendly",
 ) -> dict:
     """Returns {"manim_script": str, "tts_script": TTSScript}."""
-    if not settings.mistral_api_key:
-        raise RuntimeError("MISTRAL_API_KEY is not set")
-
-    client = Mistral(api_key=settings.mistral_api_key)
-    response = client.chat.complete(
-        model="mistral-small-latest",
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": _build_user_prompt(prompt, mode, level, mood)},
-        ],
+    logger.info("Calling LLM via %s for concept/code script", settings.llm_provider)
+    raw = _chat(
+        system=_SYSTEM_PROMPT,
+        user=_build_user_prompt(prompt, mode, level, mood),
+        temperature=0.5,
     )
-    return _parse(response.choices[0].message.content)
+    return _parse(raw)

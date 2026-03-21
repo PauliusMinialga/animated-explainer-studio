@@ -5,6 +5,7 @@ Fetches relevant content from a URL or GitHub repo and returns a concise
 summary to prepend to the prompt.
 """
 
+import base64
 import re
 import httpx
 from bs4 import BeautifulSoup
@@ -14,47 +15,131 @@ _GITHUB_REPO_RE = re.compile(
     r"https?://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/\s]+)"
 )
 
-_GITINGEST_EXCLUDE = (
-    "*.lock,*.min.js,*.min.css,package-lock.json,yarn.lock,"
-    "dist,build,node_modules,.git,*.svg,*.png,*.jpg"
-)
-_INGEST_MAX = 80_000
-_INGEST_KEEP_HEAD = 60_000
-_INGEST_KEEP_TAIL = 10_000
+# Root-level files worth fetching for context
+_KEY_ENTRY_FILES = {
+    "main.py", "app.py", "server.py",
+    "index.ts", "index.js", "App.tsx", "App.jsx", "index.tsx",
+}
+
+_GH_HEADERS = {
+    "Accept": "application/vnd.github.v3+json",
+    "User-Agent": "explainer-bot/1.0",
+}
 
 
 async def ingest_github_repo(url: str) -> str:
     """
-    Fetch full repo content via gitingest.com.
+    Build a structured repo summary via the GitHub API (no key needed for public repos).
 
-    Swaps github.com for gitingest.com, strips noisy files via query params,
-    and truncates responses over 80k chars.
+    Returns a text block covering: directory structure, key entry-point files,
+    and a README excerpt. Suitable as Mistral context (~3–5k chars).
 
     Raises:
         ValueError: if the URL is not a github.com URL.
         httpx.HTTPStatusError: if the repo returns a non-2xx (e.g. 404).
     """
-    if not _GITHUB_REPO_RE.match(url.strip()):
+    m = _GITHUB_REPO_RE.match(url.strip())
+    if not m:
         raise ValueError(f"Expected a github.com URL, got: {url!r}")
 
-    ingest_url = url.strip().replace("github.com", "gitingest.com", 1)
-    ingest_url = f"{ingest_url}?exclude={_GITINGEST_EXCLUDE}"
+    owner, repo = m.group("owner"), m.group("repo")
 
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=20) as client:
+        tree_text = await _fetch_tree_summary(client, owner, repo)
+        readme_text = await _fetch_readme(client, owner, repo)
+        key_files_text = await _fetch_key_files(client, owner, repo)
+
+    parts = [f"=== Repository: {owner}/{repo} ==="]
+    if tree_text:
+        parts.append(f"Directory structure:\n{tree_text}")
+    if key_files_text:
+        parts.append(f"Key source files:\n{key_files_text}")
+    if readme_text:
+        parts.append(f"README (excerpt):\n{readme_text[:1200]}")
+
+    return "\n\n".join(parts)
+
+
+async def _fetch_tree_summary(client: httpx.AsyncClient, owner: str, repo: str) -> str:
+    """Return a two-column directory listing (root files + top-level dirs with counts)."""
+    for ref in ("HEAD", "main", "master"):
+        try:
+            r = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/git/trees/{ref}",
+                params={"recursive": "1"},
+                headers=_GH_HEADERS,
+            )
+            if r.status_code == 200:
+                break
+        except Exception:
+            continue
+    else:
+        return ""
+
+    items = r.json().get("tree", [])
+    dir_counts: dict[str, int] = {}
+    root_files: list[str] = []
+
+    for item in items:
+        if item.get("type") != "blob":
+            continue
+        parts = item["path"].split("/")
+        if len(parts) == 1:
+            root_files.append(parts[0])
+        else:
+            top = parts[0]
+            dir_counts[top] = dir_counts.get(top, 0) + 1
+
+    lines = [f"  {f}" for f in sorted(root_files)[:10]]
+    lines += [
+        f"  {d}/  ({count} files)"
+        for d, count in sorted(dir_counts.items(), key=lambda x: -x[1])[:12]
+    ]
+    return "\n".join(lines)
+
+
+async def _fetch_readme(client: httpx.AsyncClient, owner: str, repo: str) -> str:
+    try:
         r = await client.get(
-            ingest_url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; explainer-bot/1.0)"},
+            f"https://api.github.com/repos/{owner}/{repo}/readme",
+            headers=_GH_HEADERS,
         )
-        r.raise_for_status()
+        if r.status_code == 200:
+            content = r.json().get("content", "")
+            return base64.b64decode(content).decode("utf-8", errors="ignore")
+    except Exception:
+        pass
+    return ""
 
-    body = r.text
-    if len(body) > _INGEST_MAX:
-        body = (
-            body[:_INGEST_KEEP_HEAD]
-            + "\n\n[... TRUNCATED ...]\n\n"
-            + body[-_INGEST_KEEP_TAIL:]
+
+async def _fetch_key_files(client: httpx.AsyncClient, owner: str, repo: str) -> str:
+    try:
+        r = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/contents",
+            headers=_GH_HEADERS,
         )
-    return body
+        if r.status_code != 200 or not isinstance(r.json(), list):
+            return ""
+    except Exception:
+        return ""
+
+    to_fetch = [
+        item["download_url"]
+        for item in r.json()
+        if item.get("type") == "file" and item.get("name") in _KEY_ENTRY_FILES
+    ][:2]
+
+    parts = []
+    for file_url in to_fetch:
+        try:
+            r = await client.get(file_url, headers={"User-Agent": "explainer-bot/1.0"})
+            if r.status_code == 200:
+                name = file_url.split("/")[-1]
+                parts.append(f"--- {name} ---\n{r.text[:1500]}")
+        except Exception:
+            pass
+
+    return "\n\n".join(parts)
 
 
 async def enrich_prompt(prompt: str, url: str | None) -> str:
