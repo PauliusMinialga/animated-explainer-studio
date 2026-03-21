@@ -488,7 +488,7 @@ const Premium = () => {
         <section className="mt-10">
           <button
             onClick={handlePremiumGenerate}
-            disabled={generating || !prompt.trim()}
+            disabled={generating || (mode === "concept" ? !prompt.trim() : !url.trim())}
             className="inline-flex h-12 items-center gap-2 rounded-xl bg-accent px-8 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:shadow-none"
           >
             {generating && <Loader2 className="h-4 w-4 animate-spin" />}
