@@ -2,14 +2,12 @@
 Generate endpoint with async job tracking.
 
 POST /generate   → starts background pipeline, returns job_id immediately
-GET  /jobs/{id}  → poll for status, progress, animation_url, tts_script
+GET  /jobs/{id}  → poll for status, progress, animation_url, final_url, tts_script
 
 Pipeline:
   - If prompt is a github.com URL → ingest repo via gitingest.com → generate_repo_scripts
   - Otherwise → generate_scripts (concept / code mode)
-  Both paths: Manim render → write files → return job.
-
-TTS and avatar are handled separately by Bote's pipeline.
+  Both paths: Manim render → Bote's VEED pipeline → final merge → done.
 """
 
 import json
@@ -24,7 +22,10 @@ from models import GenerateRequest, JobResponse, JobStatus, TTSScriptResponse
 from pipeline.enrich import enrich_prompt, ingest_github_repo
 from pipeline.scripts import generate_scripts, generate_repo_scripts
 from pipeline.manim_render import render_manim
+from pipeline.veed_pipeline import run_veed_pipeline
+from pipeline.final_merge import merge_final
 from database import job_dir
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ async def generate(req: GenerateRequest, background_tasks: BackgroundTasks):
         "status": JobStatus.pending,
         "progress": "Queued",
         "animation_url": None,
+        "final_url": None,
         "tts_script": None,
         "error": None,
     }
@@ -100,7 +102,6 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             manim_script = scripts["manim_script"]
             tts = scripts["tts_script"]
 
-        # ── Debug: print generated artefacts to console ──────────────────────
         logger.info(
             "[%s] ── MANIM SCRIPT ──────────────────────────────────\n%s\n"
             "─────────────────────────────────────────────────────",
@@ -113,8 +114,12 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             job_id, tts.intro, tts.info, tts.outro,
         )
 
-        # Persist raw Manim script for debugging
+        # Persist raw artefacts for debugging
         (out_dir / "manim_script.py").write_text(manim_script, encoding="utf-8")
+        (out_dir / "tts_script.json").write_text(
+            json.dumps({"intro": tts.intro, "info": tts.info, "outro": tts.outro}, indent=2),
+            encoding="utf-8",
+        )
 
         _set(job_id, progress="Rendering animation…")
         animation_path = await render_manim(
@@ -122,30 +127,42 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
             script_str=manim_script,
             scene_class="GeneratedScene",
         )
-
         final_animation = out_dir / "animation.mp4"
         if animation_path != final_animation:
             shutil.copy2(animation_path, final_animation)
 
-        tts_response = TTSScriptResponse(
-            intro=tts.intro,
-            info=tts.info,
-            outro=tts.outro,
-        )
+        tts_response = TTSScriptResponse(intro=tts.intro, info=tts.info, outro=tts.outro)
 
-        # Persist TTS script as JSON for Bote's pipeline
-        (out_dir / "tts_script.json").write_text(
-            json.dumps({"intro": tts.intro, "info": tts.info, "outro": tts.outro}, indent=2),
-            encoding="utf-8",
-        )
-
+        # Mark animation ready — frontend can show it while VEED processes
         _set(
             job_id,
-            status=JobStatus.done,
-            progress="Done",
+            progress="Generating avatar & voice…",
             animation_url=f"/files/{job_id}/animation.mp4",
             tts_script=tts_response,
         )
+
+        # ── Bote's VEED pipeline ──────────────────────────────────────────────
+        # Skip if keys not configured (e.g. local dev without VEED creds)
+        if settings.runware_api_key and settings.fal_key:
+            veed = await run_veed_pipeline(
+                intro_text=tts.intro,
+                info_text=tts.info,
+                outro_text=tts.outro,
+                job_dir=out_dir,
+            )
+
+            _set(job_id, progress="Assembling final video…")
+            final_path = out_dir / "final.mp4"
+            merge_final(
+                intro_path=veed.intro_video,
+                animation_path=final_animation,
+                info_audio_path=veed.info_audio,
+                outro_path=veed.outro_video,
+                out_path=final_path,
+            )
+            _set(job_id, final_url=f"/files/{job_id}/final.mp4")
+
+        _set(job_id, status=JobStatus.done, progress="Done")
 
     except HTTPException as exc:
         _set(job_id, status=JobStatus.failed, progress="Failed", error=exc.detail)

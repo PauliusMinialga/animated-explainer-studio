@@ -1,0 +1,5 @@
+{
+  "intro": "Gitingest is a clever tool that transforms any GitHub repository into an easy-to-read format for AI prompts.",
+  "info": "The HTML structure forms the foundation, while Tailwind CSS styles the interface with those distinctive 3D borders. JavaScript handles the form logic, letting users customize what files to include or exclude. The API integration quietly fetches repository data in the background, and UI components make everything feel smooth and responsive. Together, they create a seamless experience for digesting GitHub projects.",
+  "outro": "This follows a clean, modular architecture where each component does one job and does it well!"
+}

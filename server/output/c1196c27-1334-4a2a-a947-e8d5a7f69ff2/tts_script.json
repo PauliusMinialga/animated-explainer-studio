@@ -1,0 +1,5 @@
+{
+  "intro": "Gitingest transforms any GitHub repository into prompt-friendly text by simply changing 'hub' to 'ingest' in the URL.",
+  "info": "Gitingest works by taking a GitHub URL, processing the repository through four main components. The frontend handles user input and displays results, while the backend manages the heavy lifting of repository analysis. Git integration clones the repo and checks access permissions, and the processing engine extracts and formats the content you need. Each component works together to deliver a clean, digestible summary of any codebase.",
+  "outro": "Gitingest follows a clean separation of concerns, making it both powerful and easy to use for developers."
+}

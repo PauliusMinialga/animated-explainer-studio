@@ -1,0 +1,5 @@
+{
+  "intro": "A simple wireframe 3D map viewer built with minilibx.",
+  "info": "The program starts in main.c and reads a map file using parse.c. It stores the data in fdf.h structures. Then, draw.c renders the map using minilibx graphics. User events like zooming or moving are handled by hook.c, which updates the drawing. Any errors during this flow are caught by error.c.",
+  "outro": "This follows a classic event-driven rendering pipeline."
+}

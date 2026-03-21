@@ -10,7 +10,15 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     mistral_api_key: str = ""
-    github_token: str = ""
+
+    # Bote's pipeline
+    fal_key: str = ""
+    runware_api_key: str = ""
+
+    # Default avatar image (fal.ai public URL — no upload needed)
+    avatar_image_url: str = (
+        "https://v3.fal.media/files/koala/NLVPfOI4XL1cWT2PmmqT3_Hope.png"
+    )
 
     @property
     def llm_provider(self) -> str:

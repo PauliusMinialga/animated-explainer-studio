@@ -8,6 +8,14 @@ numpy
 mistralai
 openai
 
+# Bote's pipeline — TTS + avatar
+fal-client
+runware
+requests
+
+# Video assembly
+ffmpeg-python
+
 # Web framework
 fastapi[standard]
 uvicorn[standard]

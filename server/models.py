@@ -48,5 +48,6 @@ class JobResponse(BaseModel):
     status: JobStatus
     progress: Optional[str] = None
     animation_url: Optional[str] = None
+    final_url: Optional[str] = None
     tts_script: Optional[TTSScriptResponse] = None
     error: Optional[str] = None
