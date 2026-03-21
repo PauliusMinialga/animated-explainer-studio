@@ -32,6 +32,7 @@ class GenerateRequest(BaseModel):
     mode: Mode = Mode.concept
     level: Level = Level.beginner
     mood: Mood = Mood.friendly
+    avatar: Optional[str] = None  # avatar ID, mapped to image URL by the pipeline
     request_id: Optional[str] = None  # Supabase video_requests row ID from edge function
 
 

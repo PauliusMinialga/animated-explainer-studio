@@ -40,6 +40,13 @@ router = APIRouter(tags=["generate"])
 
 _jobs: dict[str, dict] = {}
 
+# Avatar ID → fal.ai CDN URLs (uploaded once, permanent)
+AVATAR_IMAGES: dict[str, str] = {
+    "c3po": "https://v3b.fal.media/files/b/0a931d8c/59Vm9dNdvoQGycZoi-yjA_c3po.jpg",
+    "super_man": "https://v3b.fal.media/files/b/0a931d8c/NifMgAk4qThucrr6DxfhQ_super_man.jpg",
+    "wonder_woman": "https://v3b.fal.media/files/b/0a931d8c/EnlJgbO2QVvUMcMBTqajh_wonder_woman.jpg",
+}
+
 
 def _set(job_id: str, **kwargs):
     _jobs[job_id].update(kwargs)
@@ -193,12 +200,14 @@ async def _run_repo_pipeline(
         _set(job_id, progress="Generating avatar videos…")
         if rid:
             update_request_status(rid, "finalizing")
+        avatar_image_url = AVATAR_IMAGES.get(req.avatar or "", settings.avatar_image_url) or settings.avatar_image_url
         try:
             veed = await run_veed_pipeline(
                 intro_text=narration.intro,
                 info_text=tts_info,
                 outro_text=narration.outro,
                 job_dir=out_dir,
+                avatar_image_url=avatar_image_url,
             )
             # Inject video URLs into narration dict
             narr_dict["intro_video_url"] = f"{base_url}/files/{job_id}/intro.mp4"
@@ -261,11 +270,13 @@ async def _run_code_pipeline(
     if settings.runware_api_key and settings.fal_key:
         if rid:
             update_request_status(rid, "adding_voiceover")
+        avatar_image_url = AVATAR_IMAGES.get(req.avatar or "", settings.avatar_image_url) or settings.avatar_image_url
         veed = await run_veed_pipeline(
             intro_text=tts.intro,
             info_text=tts.info,
             outro_text=tts.outro,
             job_dir=out_dir,
+            avatar_image_url=avatar_image_url,
         )
 
         _set(job_id, progress="Assembling final video…")

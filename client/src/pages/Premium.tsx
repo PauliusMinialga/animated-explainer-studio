@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Crown, Download, Loader2, X } from "lucide-react";
+import { Check, Crown, Download, Loader2, X } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -218,6 +218,7 @@ const Premium = () => {
             mood: mood.toLowerCase(),
             level: level.toLowerCase(),
             mode: "concept",
+            avatar: selectedAvatar,
           }),
         });
         if (!res.ok) throw new Error(`Backend error: ${res.status}`);

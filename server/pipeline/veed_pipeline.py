@@ -14,6 +14,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import requests as _requests
 import fal_client
@@ -62,12 +63,12 @@ async def generate_tts_audio(text: str, out_path: Path) -> Path:
     return await _tts(text, out_path)
 
 
-async def _avatar_video(audio_path: Path, out_path: Path) -> Path:
+async def _avatar_video(audio_path: Path, out_path: Path, image_url: Optional[str] = None) -> Path:
     """fal.ai VEED Fabric 1.0: audio + avatar image → mp4 URL → downloaded file."""
     os.environ["FAL_KEY"] = settings.fal_key
 
     audio_url = fal_client.upload_file(str(audio_path))
-    image_url = settings.avatar_image_url
+    image_url = image_url or settings.avatar_image_url
 
     result = fal_client.run(
         "veed/fabric-1.0",
@@ -88,6 +89,7 @@ async def run_veed_pipeline(
     info_text: str,
     outro_text: str,
     job_dir: Path,
+    avatar_image_url: Optional[str] = None,
 ) -> VeedResult:
     """
     Full Bote pipeline for one job.
@@ -109,12 +111,12 @@ async def run_veed_pipeline(
         _tts(outro_text, outro_mp3),
     )
 
-    logger.info("Generating avatar videos (intro + outro)…")
+    logger.info("Generating avatar videos (intro + outro) — image: %s", avatar_image_url or "default")
     intro_mp4 = job_dir / "intro.mp4"
     outro_mp4 = job_dir / "outro.mp4"
     await asyncio.gather(
-        _avatar_video(intro_mp3, intro_mp4),
-        _avatar_video(outro_mp3, outro_mp4),
+        _avatar_video(intro_mp3, intro_mp4, image_url=avatar_image_url),
+        _avatar_video(outro_mp3, outro_mp4, image_url=avatar_image_url),
     )
 
     return VeedResult(
