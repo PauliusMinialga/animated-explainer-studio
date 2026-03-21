@@ -120,6 +120,88 @@ def _parse(content: str) -> dict:
     }
 
 
+_REPO_PROMPT_TEMPLATE = """\
+You are generating content for a short animated educational video explaining \
+a GitHub repository to a {level} developer.
+
+Here is the full repository content:
+{repo_content}
+
+Return EXACTLY this format, no extra text:
+
+--- MANIM_SCRIPT ---
+[A self-contained Python Manim script using Scene class named GeneratedScene.
+ Visually maps the repo: main folders as labeled rectangles,
+ key files as smaller nodes, arrows showing dependencies/call flow
+ between components. Animate the connections sequentially.
+ Under 30 seconds. Use only: from manim import *
+ Do NOT use MathTex, Tex, Code(), BulletedList(), or LaTeX.
+ Use Text() for all labels. Use only: Text, VGroup, Arrow, Rectangle, Square,
+ Circle, Line, Dot, FadeIn, FadeOut, Create, Write, GrowArrow.
+ SurroundingRectangle only accepts a single Mobject — wrap slices with VGroup(*...).]
+
+--- TTS_INTRO ---
+[1 sentence: what this repo does]
+
+--- TTS_INFO ---
+[3-4 sentences, tone: {mood}: main components, what each does,
+ how they interact — follow the actual call/data flow in the code]
+
+--- TTS_OUTRO ---
+[1 sentence: key takeaway or architecture pattern used]
+"""
+
+_REPO_SECTION_RE = re.compile(
+    r"---\s*MANIM_SCRIPT\s*---\s*(.*?)\s*"
+    r"---\s*TTS_INTRO\s*---\s*(.*?)\s*"
+    r"---\s*TTS_INFO\s*---\s*(.*?)\s*"
+    r"---\s*TTS_OUTRO\s*---\s*(.*?)(?:\s*---|$)",
+    re.DOTALL,
+)
+
+
+def _parse_repo_response(content: str) -> tuple[str, TTSScript]:
+    m = _REPO_SECTION_RE.search(content)
+    if not m:
+        raise ValueError(
+            f"Repo response missing expected sections.\nPreview:\n{content[:600]}"
+        )
+    manim_script = m.group(1).strip()
+    intro = m.group(2).strip()
+    info = m.group(3).strip()
+    outro = m.group(4).strip()
+    return manim_script, TTSScript(intro=intro, info=info, outro=outro)
+
+
+def generate_repo_scripts(
+    url: str,
+    repo_content: str,
+    mood: str = "friendly",
+    level: str = "beginner",
+) -> tuple[str, TTSScript]:
+    """
+    Given pre-fetched repo content, generate a Manim script + TTSScript.
+
+    Returns (manim_script: str, tts: TTSScript).
+    Caller is responsible for fetching repo_content via ingest_github_repo().
+    """
+    if not settings.mistral_api_key:
+        raise RuntimeError("MISTRAL_API_KEY is not set")
+
+    user_prompt = _REPO_PROMPT_TEMPLATE.format(
+        repo_content=repo_content,
+        mood=mood,
+        level=level,
+    )
+
+    client = Mistral(api_key=settings.mistral_api_key)
+    response = client.chat.complete(
+        model="mistral-small-latest",
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    return _parse_repo_response(response.choices[0].message.content)
+
+
 def generate_scripts(
     prompt: str,
     mode: str = "code",

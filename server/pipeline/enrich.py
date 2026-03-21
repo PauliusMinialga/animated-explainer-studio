@@ -2,7 +2,7 @@
 URL / GitHub repo enrichment.
 
 Fetches relevant content from a URL or GitHub repo and returns a concise
-summary to prepend to the Claude prompt.
+summary to prepend to the prompt.
 """
 
 import re
@@ -13,6 +13,48 @@ from bs4 import BeautifulSoup
 _GITHUB_REPO_RE = re.compile(
     r"https?://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/\s]+)"
 )
+
+_GITINGEST_EXCLUDE = (
+    "*.lock,*.min.js,*.min.css,package-lock.json,yarn.lock,"
+    "dist,build,node_modules,.git,*.svg,*.png,*.jpg"
+)
+_INGEST_MAX = 80_000
+_INGEST_KEEP_HEAD = 60_000
+_INGEST_KEEP_TAIL = 10_000
+
+
+async def ingest_github_repo(url: str) -> str:
+    """
+    Fetch full repo content via gitingest.com.
+
+    Swaps github.com for gitingest.com, strips noisy files via query params,
+    and truncates responses over 80k chars.
+
+    Raises:
+        ValueError: if the URL is not a github.com URL.
+        httpx.HTTPStatusError: if the repo returns a non-2xx (e.g. 404).
+    """
+    if not _GITHUB_REPO_RE.match(url.strip()):
+        raise ValueError(f"Expected a github.com URL, got: {url!r}")
+
+    ingest_url = url.strip().replace("github.com", "gitingest.com", 1)
+    ingest_url = f"{ingest_url}?exclude={_GITINGEST_EXCLUDE}"
+
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        r = await client.get(
+            ingest_url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; explainer-bot/1.0)"},
+        )
+        r.raise_for_status()
+
+    body = r.text
+    if len(body) > _INGEST_MAX:
+        body = (
+            body[:_INGEST_KEEP_HEAD]
+            + "\n\n[... TRUNCATED ...]\n\n"
+            + body[-_INGEST_KEEP_TAIL:]
+        )
+    return body
 
 
 async def enrich_prompt(prompt: str, url: str | None) -> str:
@@ -38,7 +80,6 @@ async def _fetch_github_repo(owner: str, repo: str) -> str:
     """Fetch README + file tree summary from GitHub API."""
     headers = {"Accept": "application/vnd.github.v3+json"}
     async with httpx.AsyncClient(timeout=15) as client:
-        # README
         readme_text = ""
         try:
             r = await client.get(
@@ -49,12 +90,10 @@ async def _fetch_github_repo(owner: str, repo: str) -> str:
                 import base64
                 content = r.json().get("content", "")
                 readme_text = base64.b64decode(content).decode("utf-8", errors="ignore")
-                # Truncate long READMEs
                 readme_text = readme_text[:3000]
         except Exception:
             pass
 
-        # Top-level file tree
         tree_text = ""
         try:
             r = await client.get(
@@ -92,6 +131,5 @@ async def _fetch_webpage(url: str) -> str:
         tag.decompose()
 
     text = soup.get_text(separator="\n", strip=True)
-    # Collapse blank lines and truncate
     lines = [l for l in text.splitlines() if l.strip()]
     return "\n".join(lines[:150])
