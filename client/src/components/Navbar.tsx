@@ -40,8 +40,8 @@ const Navbar = () => {
         <div className="flex items-center gap-8">
           <div className="hidden items-center gap-6 text-sm font-medium sm:flex">
             <Link
-              to="/"
-              className={`transition-colors hover:text-foreground ${location.pathname === "/" ? "text-foreground" : "text-muted-foreground"}`}
+              to={homeRoute}
+              className={`transition-colors hover:text-foreground ${["/", "/premium"].includes(location.pathname) ? "text-foreground" : "text-muted-foreground"}`}
             >
               Home
             </Link>
