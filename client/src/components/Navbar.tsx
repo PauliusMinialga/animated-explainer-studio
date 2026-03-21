@@ -2,10 +2,12 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, User } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
+
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, isPremium, signOut } = useAuth();
+  const homeRoute = isPremium ? "/premium" : "/";
 
   const handleLogout = async () => {
     await signOut();
@@ -29,7 +31,7 @@ const Navbar = () => {
   return (
     <nav className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link to="/" className="flex items-center gap-2">
+        <Link to={homeRoute} className="flex items-center gap-2">
           <span className="font-display text-xl font-bold tracking-tight">
             Code<span className="hero-accent-text">Viz</span>
           </span>
@@ -38,8 +40,8 @@ const Navbar = () => {
         <div className="flex items-center gap-8">
           <div className="hidden items-center gap-6 text-sm font-medium sm:flex">
             <Link
-              to="/"
-              className={`transition-colors hover:text-foreground ${location.pathname === "/" ? "text-foreground" : "text-muted-foreground"}`}
+              to={homeRoute}
+              className={`transition-colors hover:text-foreground ${["/", "/premium"].includes(location.pathname) ? "text-foreground" : "text-muted-foreground"}`}
             >
               Home
             </Link>
