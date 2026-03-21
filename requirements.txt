@@ -1,35 +1,33 @@
-annotated-types
-anyio
-beautifulsoup4
-certifi
-charset-normalizer
-dotenv
-elevenlabs
-fal-client
-fastapi[standard]
-ffmpeg-python
-h11
-httpcore
-httpx
-httpx-sse
-idna
+# ── Animation (Timothee) ──────────────────────────────────────────────────────
+# System deps: brew install cairo pango pkg-config
+# LaTeX optional (for MathTex): brew install --cask mactex-no-gui
 manim
-mistralai
 moderngl
-msgpack
-numpy
-openai
 pycairo
-pydantic
-pydantic-settings
-pydantic_core
-python-dotenv
-python-multipart
-requests
-routers
-runware
-typing-inspection
-typing_extensions
-urllib3
+numpy
+
+# ── LLM — script generation (Timothee) ───────────────────────────────────────
+mistralai                  # Mistral Small — free tier at console.mistral.ai
+openai                     # Gemini Flash 2.0 via OpenAI-compatible endpoint
+
+# ── TTS + Avatar — Bote's pipeline ───────────────────────────────────────────
+# System dep: brew install ffmpeg
+fal-client                 # fal.ai — VEED Fabric 1.0 avatar video generation
+runware                    # Runware TTS — text to speech audio
+websockets                 # required by runware SDK
+elevenlabs                 # ElevenLabs TTS (fallback)
+requests                   # HTTP downloads (avatar video, audio files)
+
+# ── Web framework (Timothee) ──────────────────────────────────────────────────
+fastapi[standard]
 uvicorn[standard]
-websockets
+python-multipart
+
+# ── Config ────────────────────────────────────────────────────────────────────
+pydantic-settings
+python-dotenv
+
+# ── Enrichment — URL / GitHub repo context (Timothee) ────────────────────────
+httpx
+beautifulsoup4
+
