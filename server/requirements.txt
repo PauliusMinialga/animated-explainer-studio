@@ -6,6 +6,7 @@ numpy
 
 # Script generation
 mistralai
+openai
 
 # Web framework
 fastapi[standard]

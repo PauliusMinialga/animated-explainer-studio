@@ -2,9 +2,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        # Check server/.env first, then parent .env
+        env_file=(".env", "../.env"),
+        extra="ignore",
+    )
 
+    gemini_api_key: str = ""
     mistral_api_key: str = ""
+
+    @property
+    def llm_provider(self) -> str:
+        """Gemini preferred; falls back to Mistral if no Gemini key."""
+        return "gemini" if self.gemini_api_key else "mistral"
 
 
 settings = Settings()

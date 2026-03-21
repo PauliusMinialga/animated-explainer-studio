@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { Play, Crown } from "lucide-react";
+import { Play, Crown, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import PremiumGate from "@/components/PremiumGate";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const demoVideos = [
   { title: "Recursion Explained", duration: "2:34", color: "from-accent/20 to-accent/5" },
@@ -9,16 +11,25 @@ const demoVideos = [
   { title: "TCP Handshake", duration: "3:12", color: "from-orange-100 to-orange-50" },
 ];
 
-const premiumFeatures = [
-  "Custom avatar selection",
-  "Custom prompt templates",
-  "Mood & intonation settings",
-  "Experience level tuning",
-  "Priority rendering",
-];
-
 const Profile = () => {
-  const { user, loading, isPremium, tier, profile, profileLoading } = useAuth();
+  const { user, loading, isPremium, tier, profile, profileLoading, refreshProfile } = useAuth();
+  const [upgrading, setUpgrading] = useState(false);
+
+  const handleUpgrade = async () => {
+    if (!user || upgrading) return;
+    setUpgrading(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ tier: "premium" })
+      .eq("user_id", user.id);
+    if (error) {
+      toast({ title: "Error", description: "Upgrade failed. Please try again.", variant: "destructive" });
+    } else {
+      await refreshProfile();
+      toast({ title: "🎉 Welcome to Premium!", description: "You now have full access to custom video generation." });
+    }
+    setUpgrading(false);
+  };
 
   if (loading) {
     return (
@@ -79,8 +90,29 @@ const Profile = () => {
           </div>
         </div>
 
+        {/* Free user: Primary CTA to explore & generate */}
+        {!isPremium && (
+          <section className="mt-10">
+            <Link
+              to="/premium"
+              className="group flex items-center gap-5 rounded-2xl border border-accent/20 bg-gradient-to-r from-accent/10 via-accent/5 to-transparent p-6 transition-all hover:border-accent/40 hover:shadow-lg hover:shadow-accent/10"
+            >
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent text-accent-foreground shadow-md shadow-accent/20">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-display text-lg font-bold">Explore Algorithm Videos</h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Browse 50+ topics — pick one and watch an AI-generated animated explanation instantly.
+                </p>
+              </div>
+              <ArrowRight className="h-5 w-5 shrink-0 text-accent transition-transform group-hover:translate-x-1" />
+            </Link>
+          </section>
+        )}
+
         {/* Demo Videos — visible to all */}
-        <section className="mt-12">
+        <section className="mt-10">
           <h2 className="font-display text-xl font-semibold">Example Videos</h2>
           <p className="mt-1 text-sm text-muted-foreground">Watch pre-rendered demo explanations</p>
           <div className="mt-6 grid gap-6 sm:grid-cols-3">
@@ -98,12 +130,12 @@ const Profile = () => {
           </div>
         </section>
 
-        {/* Generation History — premium only */}
-        <section className="mt-12">
-          <h2 className="font-display text-xl font-semibold">Generation History</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Your previously generated videos</p>
-          <div className="mt-6">
-            <PremiumGate inline message="Generation history is a Premium feature">
+        {/* Generation History — premium users see content, free users see simple message */}
+        {isPremium && (
+          <section className="mt-12">
+            <h2 className="font-display text-xl font-semibold">Generation History</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Your previously generated videos</p>
+            <div className="mt-6">
               <p className="py-8 text-center text-sm text-muted-foreground">
                 No generated videos yet. Head to the{" "}
                 <Link to="/premium" className="font-medium text-accent hover:underline">
@@ -111,20 +143,24 @@ const Profile = () => {
                 </Link>{" "}
                 to create your first video.
               </p>
-            </PremiumGate>
-          </div>
-        </section>
+            </div>
+          </section>
+        )}
 
-        {/* Premium Features Upsell — only for free users */}
+        {/* Subtle upgrade note for free users */}
         {!isPremium && (
-          <section className="mt-16">
-            <PremiumGate message="Unlock the full power of CodeViz">
-              <div className="grid gap-4 sm:grid-cols-2">
-                {premiumFeatures.map((f) => (
-                  <div key={f} className="rounded-xl border bg-secondary p-4 text-sm font-medium">{f}</div>
-                ))}
-              </div>
-            </PremiumGate>
+          <section className="mt-12 rounded-2xl border border-accent/20 bg-accent/5 p-6 text-center">
+            <Crown className="mx-auto h-7 w-7 text-accent" />
+            <h3 className="mt-2 font-display text-base font-semibold">Want custom prompts, avatars & mood settings?</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Upgrade to Premium for the full experience.</p>
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
+            >
+              {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+              {upgrading ? "Upgrading…" : "Upgrade to Premium"}
+            </button>
           </section>
         )}
       </div>
