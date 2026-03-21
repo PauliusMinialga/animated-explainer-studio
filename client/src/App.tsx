@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
 import Premium from "./pages/Premium";
+import Concepts from "./pages/Concepts";
 import RepoExplainer from "./pages/RepoExplainer";
 import NotFound from "./pages/NotFound";
 
