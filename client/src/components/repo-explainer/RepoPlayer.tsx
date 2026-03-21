@@ -35,6 +35,7 @@ interface RepoPlayerProps {
 const FALLBACK_SCENE_DURATION = 6000;
 
 export default function RepoPlayer({ architecture, storyboard, narration }: RepoPlayerProps) {
+  const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState<PlaybackPhase>({ kind: "intro" });
   const [autoPlay, setAutoPlay] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -158,6 +159,25 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
       style={{ display: "none" }}
     />
   );
+
+  // Start screen — required for browser autoplay policy (needs user click)
+  if (!started) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-6 bg-gray-950">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-white">{architecture.repo_name}</h2>
+          <p className="mt-2 text-sm text-white/50 max-w-md">{architecture.summary}</p>
+        </div>
+        <button
+          onClick={() => setStarted(true)}
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500 transition-colors"
+        >
+          ▶ Start Explanation
+        </button>
+        <p className="text-[11px] text-white/30">{totalScenes} scenes • narrated walkthrough</p>
+      </div>
+    );
+  }
 
   // Intro video
   if (phase.kind === "intro" && hasIntroVideo) {
