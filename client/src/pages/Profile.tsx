@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { Play, Crown, Sparkles, ArrowRight } from "lucide-react";
+import { Play, Crown, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const demoVideos = [
   { title: "Recursion Explained", duration: "2:34", color: "from-accent/20 to-accent/5" },
@@ -9,7 +12,24 @@ const demoVideos = [
 ];
 
 const Profile = () => {
-  const { user, loading, isPremium, tier, profile, profileLoading } = useAuth();
+  const { user, loading, isPremium, tier, profile, profileLoading, refreshProfile } = useAuth();
+  const [upgrading, setUpgrading] = useState(false);
+
+  const handleUpgrade = async () => {
+    if (!user || upgrading) return;
+    setUpgrading(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ tier: "premium" })
+      .eq("user_id", user.id);
+    if (error) {
+      toast({ title: "Error", description: "Upgrade failed. Please try again.", variant: "destructive" });
+    } else {
+      await refreshProfile();
+      toast({ title: "🎉 Welcome to Premium!", description: "You now have full access to custom video generation." });
+    }
+    setUpgrading(false);
+  };
 
   if (loading) {
     return (
@@ -129,13 +149,18 @@ const Profile = () => {
 
         {/* Subtle upgrade note for free users */}
         {!isPremium && (
-          <section className="mt-12 rounded-2xl border border-dashed border-muted-foreground/20 p-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              Want custom prompts, avatars, and mood settings?{" "}
-              <Link to="/premium" className="font-semibold text-accent hover:underline">
-                Learn about Premium
-              </Link>
-            </p>
+          <section className="mt-12 rounded-2xl border border-accent/20 bg-accent/5 p-6 text-center">
+            <Crown className="mx-auto h-7 w-7 text-accent" />
+            <h3 className="mt-2 font-display text-base font-semibold">Want custom prompts, avatars & mood settings?</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Upgrade to Premium for the full experience.</p>
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
+            >
+              {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+              {upgrading ? "Upgrading…" : "Upgrade to Premium"}
+            </button>
           </section>
         )}
       </div>
