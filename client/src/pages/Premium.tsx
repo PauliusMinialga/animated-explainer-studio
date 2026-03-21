@@ -359,12 +359,14 @@ const Premium = () => {
             <p className="mt-1 text-sm text-muted-foreground">
               Upgrade to Premium to write your own prompts, choose avatars, and customise mood & level.
             </p>
-            <a
-              href="/premium"
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
             >
-              <Crown className="h-4 w-4" /> Upgrade to Premium
-            </a>
+              {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+              {upgrading ? "Upgrading…" : "Upgrade to Premium"}
+            </button>
           </div>
         </div>
       </div>
