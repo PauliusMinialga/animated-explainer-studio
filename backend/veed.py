@@ -1,4 +1,5 @@
 import fal_client
+from elevenlabs.client import ElevenLabs
 from pathlib import Path
 from dataclasses import dataclass
 
