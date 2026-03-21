@@ -62,6 +62,9 @@ Rules:
 - First scene is always the global overview (all components visible)
 - Last scene is always a recap (all components visible, all highlighted)
 - Narration: plain spoken English, no markdown, 2–3 sentences per scene
+- IMPORTANT: Each scene narration must be unique — do NOT repeat sentences or ideas across scenes.
+  The overview introduces the system. Deep dives explain specifics. The recap ties it together.
+  Never restate what was already said in a previous scene.
 - Panel bullets: 2–4 short points
 - All component/relationship IDs must match the architecture
 - Return ONLY raw JSON

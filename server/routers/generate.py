@@ -138,9 +138,9 @@ async def _run_repo_pipeline(
     (out_dir / "storyboard.json").write_text(json.dumps(sb_dict, indent=2))
     _set(job_id, storyboard=sb_dict)
 
-    # Stage 3: Narration
-    _set(job_id, progress="Assembling narration…")
-    narration = assemble_narration(storyboard, architecture.summary)
+    # Stage 3: Narration (assembly + LLM polish pass)
+    _set(job_id, progress="Polishing narration…")
+    narration = await asyncio.to_thread(assemble_narration, storyboard, architecture.summary)
     narr_dict = narration.model_dump()
 
     # ── Per-scene TTS audio ───────────────────────────────────────────────────
@@ -184,16 +184,21 @@ async def _run_repo_pipeline(
     if settings.runware_api_key and settings.fal_key:
         _set(job_id, progress="Generating avatar videos…")
         try:
-            veed = await run_veed_pipeline(
-                intro_text=narration.intro,
-                info_text=tts_info,
-                outro_text=narration.outro,
-                job_dir=out_dir,
+            veed = await asyncio.wait_for(
+                run_veed_pipeline(
+                    intro_text=narration.intro,
+                    info_text=tts_info,
+                    outro_text=narration.outro,
+                    job_dir=out_dir,
+                ),
+                timeout=300,  # 5 min hard cap — avatar gen can hang
             )
             # Inject video URLs into narration dict
             narr_dict["intro_video_url"] = f"{base_url}/files/{job_id}/intro.mp4"
             narr_dict["outro_video_url"] = f"{base_url}/files/{job_id}/outro.mp4"
             _set(job_id, narration=narr_dict)
+        except asyncio.TimeoutError:
+            logger.warning("[%s] VEED avatar pipeline timed out after 300s (non-fatal)", job_id)
         except Exception as exc:
             logger.warning("[%s] VEED avatar pipeline failed (non-fatal): %s", job_id, exc)
 
