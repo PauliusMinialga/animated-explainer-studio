@@ -6,9 +6,5 @@ class Settings(BaseSettings):
 
     mistral_api_key: str = ""
 
-    # Supabase (optional — Paul's frontend uses this)
-    supabase_url: str = ""
-    supabase_key: str = ""
-
 
 settings = Settings()

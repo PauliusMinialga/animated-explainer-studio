@@ -50,15 +50,3 @@ class JobResponse(BaseModel):
     animation_url: Optional[str] = None
     tts_script: Optional[TTSScriptResponse] = None
     error: Optional[str] = None
-
-
-class CachedVideo(BaseModel):
-    slug: str
-    title: str
-    description: str
-    category: str
-    tags: list[str]
-    video_url: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    duration_seconds: Optional[float] = None
-    has_script: bool = False

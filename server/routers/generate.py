@@ -8,10 +8,8 @@ Pipeline: prompt → Mistral (manim script + 3-part narration) → Manim render 
 TTS and avatar are handled separately by Bote's pipeline.
 """
 
-import asyncio
 import shutil
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
@@ -20,7 +18,6 @@ from pipeline.enrich import enrich_prompt
 from pipeline.scripts import generate_scripts
 from pipeline.manim_render import render_manim
 from database import job_dir
-from catalog import CATALOG_BY_SLUG
 
 router = APIRouter(tags=["generate"])
 
@@ -60,11 +57,6 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
         _set(job_id, status=JobStatus.running, progress="Enriching prompt…")
         enriched_prompt = await enrich_prompt(req.prompt, req.url)
 
-        # Check if prompt matches a pre-built catalog entry
-        slug_guess = req.prompt.strip().lower().replace(" ", "-")
-        catalog_entry = CATALOG_BY_SLUG.get(slug_guess)
-        use_cached_script = catalog_entry and catalog_entry.has_script
-
         _set(job_id, progress="Generating scripts…")
         scripts = generate_scripts(
             enriched_prompt,
@@ -74,21 +66,11 @@ async def _run_pipeline(job_id: str, req: GenerateRequest):
         )
         tts_script = scripts["tts_script"]
 
-        if use_cached_script:
-            script_path = Path(__file__).parent.parent / catalog_entry.script_path
-            scene_class = catalog_entry.scene_class
-            manim_script_str = None
-        else:
-            script_path = None
-            scene_class = "GeneratedScene"
-            manim_script_str = scripts["manim_script"]
-
         _set(job_id, progress="Rendering animation…")
         animation_path = await render_manim(
             out_dir,
-            script_str=manim_script_str,
-            script_path=script_path,
-            scene_class=scene_class,
+            script_str=scripts["manim_script"],
+            scene_class="GeneratedScene",
         )
 
         final_animation = out_dir / "animation.mp4"
