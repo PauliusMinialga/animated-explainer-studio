@@ -77,8 +77,8 @@ interface RepoExplainerFlowProps {
 
 // ── Dagre layout ────────────────────────────────────────────────────────────
 
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 80;
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 120;
 
 function layoutNodes(
   components: ArchComponent[],
@@ -86,7 +86,7 @@ function layoutNodes(
 ): Map<string, { x: number; y: number }> {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 60 });
+  g.setGraph({ rankdir: "TB", ranksep: 140, nodesep: 80 });
 
   components.forEach((c) => {
     g.setNode(c.id, { width: NODE_WIDTH, height: NODE_HEIGHT });

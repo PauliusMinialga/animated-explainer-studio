@@ -39,6 +39,7 @@ function ComponentNode({ data }: NodeProps<ComponentNodeData>) {
         borderRadius: 12,
         padding: "10px 16px",
         minWidth: 140,
+        maxWidth: 220,
         opacity: data.dimmed ? 0.3 : 1,
         transform: data.highlighted ? "scale(1.05)" : data.dimmed ? "scale(0.95)" : "scale(1)",
         boxShadow: data.highlighted ? `0 0 16px ${style.border}60` : "0 4px 12px rgba(0,0,0,0.3)",
