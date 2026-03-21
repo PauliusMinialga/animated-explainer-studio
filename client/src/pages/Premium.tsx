@@ -97,6 +97,22 @@ const Premium = () => {
     setSelectedPremadeFile(item.file);
   };
 
+  const handleUpgrade = async () => {
+    if (!user || upgrading) return;
+    setUpgrading(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ tier: "premium" })
+      .eq("user_id", user.id);
+    if (error) {
+      toast({ title: "Error", description: "Upgrade failed. Please try again.", variant: "destructive" });
+    } else {
+      await refreshProfile();
+      toast({ title: "🎉 Welcome to Premium!", description: "You now have full access to custom video generation." });
+    }
+    setUpgrading(false);
+  };
+
 
   const handlePremiumGenerate = async () => {
     const isPromptMode = mode === "concept";
