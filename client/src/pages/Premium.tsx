@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Crown, Download, Loader2, Lock, Play } from "lucide-react";
+import { Check, Crown, Download, Loader2, Play } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,15 +35,6 @@ const FAKE_STEPS = [
   "Finalising video…",
 ];
 
-/** Overlay badge shown on locked sections for free users */
-const LockedOverlay = ({ label }: { label: string }) => (
-  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-card/70 backdrop-blur-[2px]">
-    <div className="flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-xs font-semibold text-muted-foreground">
-      <Lock className="h-3.5 w-3.5" />
-      {label}
-    </div>
-  </div>
-);
 
 const Premium = () => {
   const { user, loading, isPremium, profileLoading } = useAuth();
