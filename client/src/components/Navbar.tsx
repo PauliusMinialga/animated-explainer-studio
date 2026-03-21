@@ -7,7 +7,7 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading, isPremium, signOut } = useAuth();
-  const homeRoute = isPremium ? "/premium" : "/";
+  const homeRoute = user ? (isPremium ? "/premium" : "/concepts") : "/";
 
   const handleLogout = async () => {
     await signOut();
