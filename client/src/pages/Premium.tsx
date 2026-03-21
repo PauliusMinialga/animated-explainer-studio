@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Download, Loader2, Lock } from "lucide-react";
-import { Navigate, Link } from "react-router-dom";
+import { Check, Crown, Download, Loader2, Lock } from "lucide-react";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import PremiumGate from "@/components/PremiumGate";
 
 const BACKEND = "http://localhost:8000";
 
@@ -34,10 +33,20 @@ type Job = {
   error: string | null;
 };
 
+/** Overlay badge shown on locked sections for free users */
+const LockedOverlay = ({ label }: { label: string }) => (
+  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-card/70 backdrop-blur-[2px]">
+    <div className="flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-xs font-semibold text-muted-foreground">
+      <Lock className="h-3.5 w-3.5" />
+      {label}
+    </div>
+  </div>
+);
+
 const Premium = () => {
   const { user, loading, isPremium, profileLoading } = useAuth();
   const [selectedAvatar, setSelectedAvatar] = useState("ava1");
-  const [mode, setMode] = useState<"concept" | "code">("code");
+  const [mode, setMode] = useState<"concept" | "code">("concept");
   const [mood, setMood] = useState("Friendly");
   const [level, setLevel] = useState("Beginner");
   const [prompt, setPrompt] = useState("");
@@ -65,7 +74,7 @@ const Premium = () => {
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !isPremium) return;
+    if (!prompt.trim()) return;
     setJob(null);
     setActiveStep(0);
 
@@ -75,9 +84,9 @@ const Premium = () => {
       body: JSON.stringify({
         prompt: prompt.trim(),
         url: url.trim() || null,
-        mode,
-        level: level.toLowerCase(),
-        mood: mood.toLowerCase(),
+        mode: isPremium ? mode : "concept",
+        level: isPremium ? level.toLowerCase() : "beginner",
+        mood: isPremium ? mood.toLowerCase() : "friendly",
       }),
     });
 
@@ -121,36 +130,6 @@ const Premium = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Free user — show full-page upgrade prompt
-  if (!isPremium) {
-    return (
-      <div className="px-6 py-12">
-        <div className="mx-auto max-w-2xl text-center">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-accent/10">
-            <Lock className="h-10 w-10 text-accent" />
-          </div>
-          <h1 className="mt-6 font-display text-3xl font-bold">Premium Access Required</h1>
-          <p className="mt-3 text-muted-foreground">
-            Video generation, avatar selection, mood & level settings, and generation history
-            are available exclusively for Premium users.
-          </p>
-          <div className="mt-8 flex items-center justify-center gap-4">
-            <Link
-              to="/profile"
-              className="inline-flex h-11 items-center rounded-xl border px-6 text-sm font-semibold transition-colors hover:bg-secondary"
-            >
-              Back to Profile
-            </Link>
-            {/* TODO: Link to actual upgrade/payment flow */}
-            <button className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-colors hover:bg-accent/90">
-              Upgrade to Premium
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const isRunning = job?.status === "pending" || job?.status === "running";
   const isDone = job?.status === "done";
   const isFailed = job?.status === "failed";
@@ -158,25 +137,36 @@ const Premium = () => {
   return (
     <div className="px-6 py-12">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
-          ✨ Premium
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          {isPremium && (
+            <div className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
+              <Crown className="h-3.5 w-3.5" /> Premium
+            </div>
+          )}
         </div>
-        <h1 className="font-display text-3xl font-bold">Create Your Video</h1>
-        <p className="mt-2 text-muted-foreground">Select an avatar, write your prompt, and generate an animated explanation.</p>
+        <h1 className="mt-2 font-display text-3xl font-bold">Create Your Video</h1>
+        <p className="mt-2 text-muted-foreground">
+          {isPremium
+            ? "Select an avatar, write your prompt, and generate an animated explanation."
+            : "Write a concept prompt to generate a pre-made animated explanation. Upgrade to unlock avatars, code mode & settings."}
+        </p>
 
-        {/* Avatar Selection */}
-        <section className="mt-10">
+        {/* Avatar Selection — locked for free */}
+        <section className="relative mt-10">
+          {!isPremium && <LockedOverlay label="Premium — Upgrade to choose an avatar" />}
           <h2 className="font-display text-lg font-semibold">Choose Avatar</h2>
-          <div className="mt-4 grid grid-cols-3 gap-4 sm:grid-cols-6">
+          <div className={`mt-4 grid grid-cols-3 gap-4 sm:grid-cols-6 ${!isPremium ? "pointer-events-none opacity-40" : ""}`}>
             {avatars.map((a) => (
               <button
                 key={a.id}
-                onClick={() => setSelectedAvatar(a.id)}
+                onClick={() => isPremium && setSelectedAvatar(a.id)}
+                disabled={!isPremium}
                 className={`relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all hover:shadow-md ${
-                  selectedAvatar === a.id ? "border-accent bg-accent/5 shadow-md" : "border-transparent bg-card"
+                  selectedAvatar === a.id && isPremium ? "border-accent bg-accent/5 shadow-md" : "border-transparent bg-card"
                 }`}
               >
-                {selectedAvatar === a.id && (
+                {selectedAvatar === a.id && isPremium && (
                   <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent">
                     <Check className="h-3 w-3 text-accent-foreground" />
                   </div>
@@ -192,27 +182,35 @@ const Premium = () => {
         <section className="mt-10">
           <h2 className="font-display text-lg font-semibold">Your Prompt</h2>
           <div className="mt-4 space-y-4">
-            <div className="inline-flex rounded-xl border bg-secondary p-1">
-              {(["concept", "code"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`rounded-lg px-5 py-2 text-sm font-medium transition-all ${
-                    mode === m ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {m === "concept" ? "Concept Mode" : "Code Mode"}
-                </button>
-              ))}
+            {/* Mode toggle — locked for free */}
+            <div className="relative inline-block">
+              {!isPremium && (
+                <div className="absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-muted">
+                  <Lock className="h-3 w-3 text-muted-foreground" />
+                </div>
+              )}
+              <div className={`inline-flex rounded-xl border bg-secondary p-1 ${!isPremium ? "opacity-50" : ""}`}>
+                {(["concept", "code"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => isPremium && setMode(m)}
+                    disabled={!isPremium}
+                    className={`rounded-lg px-5 py-2 text-sm font-medium transition-all ${
+                      mode === m ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    } ${!isPremium ? "cursor-not-allowed" : ""}`}
+                  >
+                    {m === "concept" ? "Concept Mode" : "Code Mode"}
+                  </button>
+                ))}
+              </div>
             </div>
+
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={5}
               className="flex w-full rounded-xl border bg-card px-4 py-3 font-mono text-sm outline-none transition-colors focus:ring-2 focus:ring-ring"
-              placeholder={mode === "concept"
-                ? "Describe a concept, e.g. 'Explain how recursion works with a visual tree diagram'"
-                : "Paste a code snippet to be explained visually…\n\ndef factorial(n):\n    if n <= 1: return 1\n    return n * factorial(n - 1)"}
+              placeholder="Describe a concept, e.g. 'Explain how recursion works with a visual tree diagram'"
             />
             <input
               type="url"
@@ -224,15 +222,16 @@ const Premium = () => {
           </div>
         </section>
 
-        {/* Settings */}
-        <section className="mt-10">
+        {/* Settings — locked for free */}
+        <section className="relative mt-10">
+          {!isPremium && <LockedOverlay label="Premium — Upgrade to customise mood & level" />}
           <h2 className="font-display text-lg font-semibold">Settings</h2>
-          <div className="mt-4 grid gap-6 sm:grid-cols-2">
+          <div className={`mt-4 grid gap-6 sm:grid-cols-2 ${!isPremium ? "pointer-events-none opacity-40" : ""}`}>
             <div>
               <label className="mb-2 block text-sm font-medium">Mood / Intonation</label>
               <div className="flex flex-wrap gap-2">
                 {moods.map((m) => (
-                  <button key={m} onClick={() => setMood(m)}
+                  <button key={m} onClick={() => isPremium && setMood(m)} disabled={!isPremium}
                     className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
                       mood === m ? "border-accent bg-accent/10 text-accent" : "bg-card text-muted-foreground hover:text-foreground"
                     }`}
@@ -244,7 +243,7 @@ const Premium = () => {
               <label className="mb-2 block text-sm font-medium">Experience Level</label>
               <div className="flex flex-wrap gap-2">
                 {levels.map((l) => (
-                  <button key={l} onClick={() => setLevel(l)}
+                  <button key={l} onClick={() => isPremium && setLevel(l)} disabled={!isPremium}
                     className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
                       level === l ? "border-accent bg-accent/10 text-accent" : "bg-card text-muted-foreground hover:text-foreground"
                     }`}
