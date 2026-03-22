@@ -1,6 +1,6 @@
 /** Concepts page — browse pre-made code/concept demo videos (no backend generation). */
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Crown, Download, Play } from "lucide-react";
+import { Check, ChevronDown, Crown, Download, Play } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
