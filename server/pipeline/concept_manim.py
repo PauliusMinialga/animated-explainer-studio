@@ -98,7 +98,13 @@ LAYOUT RULES (critical for visual quality — READ CAREFULLY):
 NARRATION RULES:
 - Plain spoken English, no markdown, no special characters
 - INTRO: ~20 words, conversational greeting + topic introduction
-- INFO: ~80–120 words, matches the visual timeline of the single animation
+- INFO: ~80–120 words — this is the VOICEOVER played DURING the animation.
+  It MUST follow the exact visual sequence of the animation, step by step.
+  Write it so each sentence describes what is CURRENTLY appearing on screen.
+  The animation has self.wait() calls between steps — your narration sentences
+  should match those pauses. Think of it as a guided commentary:
+  "First, we see... Then, the pointer moves to... Notice how..."
+  Do NOT summarize the whole concept upfront — narrate it as it happens visually.
 - OUTRO: ~20 words, clear takeaway or summary
 
 Return ONLY this exact format:
