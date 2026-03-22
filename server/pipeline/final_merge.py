@@ -18,7 +18,7 @@ _SCALE = "scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)
 
 
 def _run(*args: str) -> None:
-    subprocess.run(list(args), check=True, capture_output=True)
+    subprocess.run(list(args), check=True, capture_output=True, close_fds=True, stdin=subprocess.DEVNULL)
 
 
 def merge_final(
