@@ -383,6 +383,16 @@ async def _run_prompt_pipeline(
         except Exception as exc:
             logger.warning("[%s] VEED avatar pipeline failed (non-fatal): %s", job_id, exc)
 
+    # ── Render final.mp4 from scene cards + avatar clips ─────────────────────
+    try:
+        from pipeline.prompt_video import render_prompt_video
+        _set(job_id, progress="Rendering final video…")
+        await asyncio.to_thread(render_prompt_video, out_dir)
+        _set(job_id, final_url=f"{base_url}/files/{job_id}/final.mp4")
+        logger.info("[%s] Prompt video rendered → final.mp4", job_id)
+    except Exception as exc:
+        logger.warning("[%s] Prompt video render failed (non-fatal): %s", job_id, exc)
+
     _set(job_id, status=JobStatus.done, progress="Done")
 
 
