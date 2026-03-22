@@ -163,22 +163,15 @@ _SANITIZE_RULES: List[Tuple[re.Pattern, str, str]] = [
 
 
 def _inject_camera_setup(script: str) -> str:
-    """Inject a camera/frame setup at the top of construct() to ensure content stays in frame.
-
-    Adds self.camera.frame_width/height guard and a post-construct auto-fit
-    by wrapping the scene with a safe viewport configuration.
-    """
-    # Add a safe frame config at the class level if not already present
+    """Inject a camera/frame setup at the top of construct() to ensure content stays in frame."""
     if "frame_width" in script or "camera" in script:
-        return script  # already has camera config, don't override
+        return script
 
-    # Inject config class attribute for wider frame to reduce clipping risk
     config_block = '''
     def setup(self):
         # Ensure consistent safe viewport
         self.camera.background_color = "#1a1a2e"
 '''
-    # Insert setup() method right before construct()
     script = script.replace(
         "    def construct(self):",
         config_block + "    def construct(self):",
@@ -187,7 +180,7 @@ def _inject_camera_setup(script: str) -> str:
     return script
 
 
-
+def _sanitize_manim_script(script: str) -> str:
     """Apply safety sanitization to LLM-generated Manim code.
 
     Catches common LLM mistakes that violate Manim API constraints,
