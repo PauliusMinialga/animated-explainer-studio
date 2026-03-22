@@ -10,7 +10,6 @@
  * Falls back to timer-based advancement if no audio available.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download } from "lucide-react";
 import RepoExplainerFlow from "./RepoExplainerFlow";
 import { API_BASE } from "@/lib/utils";
 
@@ -262,15 +261,6 @@ export default function RepoPlayer({ architecture, storyboard, narration, jobId 
           >
             ↺ Watch again
           </button>
-          {jobId && (
-            <a
-              href={`${API_BASE}/download/${jobId}`}
-              download
-              className="flex items-center gap-1.5 rounded-lg border border-white/20 px-5 py-2 text-sm font-medium text-white/70 hover:bg-white/10 transition-colors"
-            >
-              <Download className="h-4 w-4" /> Download Video
-            </a>
-          )}
         </div>
       </div>
     );

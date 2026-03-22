@@ -93,25 +93,13 @@ async def get_job(job_id: str):
 
 @router.get("/download/{job_id}")
 async def download_video(job_id: str):
-    """Download the generated animation video for a job."""
+    """Download the generated Manim video (concept_algo jobs only)."""
     out_dir = job_dir(job_id)
-    # Try common video filenames in order of preference (final.mp4 = merged full video)
     for name in ("final.mp4", "animation.mp4"):
-        path = out_dir / name
-        if path.exists():
-            return FileResponse(
-                path,
-                media_type="video/mp4",
-                filename=f"explainer-{job_id[:8]}.mp4",
-            )
-    # Check for any mp4 in job dir
-    mp4s = list(out_dir.glob("*.mp4"))
-    if mp4s:
-        return FileResponse(
-            mp4s[0],
-            media_type="video/mp4",
-            filename=f"explainer-{job_id[:8]}.mp4",
-        )
+        p = out_dir / name
+        if p.exists():
+            return FileResponse(p, media_type="video/mp4",
+                                filename=f"explainer-{job_id[:8]}.mp4")
     raise HTTPException(status_code=404, detail="No video file found for this job")
 
 
@@ -284,16 +272,6 @@ async def _run_repo_pipeline(
         except Exception as exc:
             logger.warning("[%s] VEED avatar pipeline failed (non-fatal): %s", job_id, exc)
 
-    # ── Render final.mp4 (intro + info narration + outro) ────────────────────
-    try:
-        from pipeline.prompt_video import render_prompt_video
-        _set(job_id, progress="Rendering final video…")
-        await asyncio.to_thread(render_prompt_video, out_dir)
-        _set(job_id, final_url=f"{base_url}/files/{job_id}/final.mp4")
-        logger.info("[%s] Repo final video rendered → final.mp4", job_id)
-    except Exception as exc:
-        logger.warning("[%s] Repo final video render failed (non-fatal): %s", job_id, exc)
-
     _set(job_id, status=JobStatus.done, progress="Done")
 
 
@@ -392,16 +370,6 @@ async def _run_prompt_pipeline(
             _set(job_id, narration=narr_dict)
         except Exception as exc:
             logger.warning("[%s] VEED avatar pipeline failed (non-fatal): %s", job_id, exc)
-
-    # ── Render final.mp4 from scene cards + avatar clips ─────────────────────
-    try:
-        from pipeline.prompt_video import render_prompt_video
-        _set(job_id, progress="Rendering final video…")
-        await asyncio.to_thread(render_prompt_video, out_dir)
-        _set(job_id, final_url=f"{base_url}/files/{job_id}/final.mp4")
-        logger.info("[%s] Prompt video rendered → final.mp4", job_id)
-    except Exception as exc:
-        logger.warning("[%s] Prompt video render failed (non-fatal): %s", job_id, exc)
 
     _set(job_id, status=JobStatus.done, progress="Done")
 
