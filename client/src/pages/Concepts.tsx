@@ -1,11 +1,12 @@
 /** Concepts page — browse pre-made code/concept demo videos (no backend generation). */
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Crown, Download, Loader2, Play } from "lucide-react";
+import { ChevronDown, Crown, Download, Play } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import AlgorithmBrowser, { type AlgorithmItem } from "@/components/AlgorithmBrowser";
+import { getCookingMessage } from "@/lib/cooking-messages";
 
 const premadeItems = [
   { id: "recursion", label: "Recursion", file: "/demo/recursion.mp4" },
@@ -16,12 +17,7 @@ const premadeItems = [
   { id: "explain_dijkstra", label: "Dijkstra", file: "/demo/explain_dijkstra.mp4" },
 ];
 
-const FAKE_STEPS = [
-  "Generating scripts…",
-  "Rendering animation…",
-  "Adding voiceover…",
-  "Finalising video…",
-];
+const COOKING_ROTATE_INTERVAL = 2000;
 
 const Concepts = () => {
   const { user, loading, isPremium, profileLoading, refreshProfile } = useAuth();
@@ -32,7 +28,7 @@ const Concepts = () => {
   const [browserOpen, setBrowserOpen] = useState(false);
 
   const [generating, setGenerating] = useState(false);
-  const [fakeStep, setFakeStep] = useState(-1);
+  const [cookingTick, setCookingTick] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -44,6 +40,12 @@ const Concepts = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!generating) return;
+    const id = setInterval(() => setCookingTick((t) => t + 1), COOKING_ROTATE_INTERVAL);
+    return () => clearInterval(id);
+  }, [generating]);
+
   const handleGenerate = () => {
     if (!selectedPremade || generating) return;
     const item = premadeItems.find((c) => c.id === selectedPremade);
@@ -52,22 +54,17 @@ const Concepts = () => {
 
     setGenerating(true);
     setVideoUrl(null);
-    setFakeStep(0);
+    setCookingTick(0);
 
     timerRef.current.forEach(clearTimeout);
     timerRef.current = [];
 
-    FAKE_STEPS.forEach((_, i) => {
-      const t = setTimeout(() => setFakeStep(i), i * 1200);
-      timerRef.current.push(t);
-    });
-
-    const finalTimer = setTimeout(() => {
+    // Fake ~5s delay then reveal the pre-made video
+    const t = setTimeout(() => {
       setGenerating(false);
-      setFakeStep(FAKE_STEPS.length);
       setVideoUrl(file);
-    }, FAKE_STEPS.length * 1200 + 800);
-    timerRef.current.push(finalTimer);
+    }, 5000);
+    timerRef.current.push(t);
   };
 
   const handleBrowserSelect = (item: AlgorithmItem) => {
@@ -160,32 +157,23 @@ const Concepts = () => {
             disabled={generating || !selectedPremade}
             className="inline-flex h-12 items-center gap-2 rounded-xl bg-accent px-8 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:shadow-none"
           >
-            {generating && <Loader2 className="h-4 w-4 animate-spin" />}
-            {generating ? "Generating…" : "Generate Video"}
+            Generate Video
           </button>
         </div>
 
-        {/* Progress steps */}
-        {(generating || fakeStep === FAKE_STEPS.length) && !videoUrl && (
-          <div className="mt-6 space-y-3 rounded-xl border bg-card p-6">
-            {FAKE_STEPS.map((label, i) => {
-              const done = i < fakeStep || fakeStep === FAKE_STEPS.length;
-              const active = i === fakeStep && generating;
-              return (
-                <div key={i} className="flex items-center gap-3">
-                  {done ? (
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent">
-                      <Check className="h-3.5 w-3.5 text-accent-foreground" />
-                    </div>
-                  ) : (
-                    <div className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${active ? "border-accent" : "border-muted"}`}>
-                      {active && <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />}
-                    </div>
-                  )}
-                  <span className={`text-sm ${done ? "font-medium" : active ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
-                </div>
-              );
-            })}
+        {/* Cooking animation — consistent with Premium mode */}
+        {generating && (
+          <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border bg-card p-12 text-center">
+            <div className="relative mb-6">
+              <div className="h-16 w-16 animate-spin rounded-full border-4 border-muted border-t-accent" />
+              <span className="absolute inset-0 flex items-center justify-center text-2xl">🧑‍🍳</span>
+            </div>
+            <p className="text-lg font-semibold text-foreground transition-all duration-500">
+              {getCookingMessage("rendering", cookingTick)}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Preparing your video…
+            </p>
           </div>
         )}
 
