@@ -7,14 +7,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import AlgorithmBrowser, { type AlgorithmItem } from "@/components/AlgorithmBrowser";
 
-const premadeConcepts = [
+const premadeItems = [
   { id: "recursion", label: "Recursion", file: "/demo/recursion.mp4" },
   { id: "binary_search", label: "Binary Search", file: "/demo/binary_search.mp4" },
   { id: "tcp_handshake", label: "TCP Handshake", file: "/demo/tcp_handshake.mp4" },
   { id: "gradient_descent", label: "Gradient Descent", file: "/demo/gradient_descent.mp4" },
-];
-
-const premadeCode = [
   { id: "explain_factorial", label: "Factorial", file: "/demo/explain_factorial.mp4" },
   { id: "explain_dijkstra", label: "Dijkstra", file: "/demo/explain_dijkstra.mp4" },
 ];
@@ -30,7 +27,6 @@ const Concepts = () => {
   const { user, loading, isPremium, profileLoading, refreshProfile } = useAuth();
   const [upgrading, setUpgrading] = useState(false);
 
-  const [mode, setMode] = useState<"concept" | "code">("concept");
   const [selectedPremade, setSelectedPremade] = useState<string | null>(null);
   const [selectedPremadeFile, setSelectedPremadeFile] = useState<string | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -48,15 +44,9 @@ const Concepts = () => {
     };
   }, []);
 
-  useEffect(() => {
-    setSelectedPremade(null);
-    setSelectedPremadeFile(null);
-  }, [mode]);
-
   const handleGenerate = () => {
     if (!selectedPremade || generating) return;
-    const list = mode === "code" ? premadeCode : premadeConcepts;
-    const item = list.find((c) => c.id === selectedPremade);
+    const item = premadeItems.find((c) => c.id === selectedPremade);
     const file = item?.file ?? selectedPremadeFile;
     if (!file) return;
 
@@ -96,7 +86,7 @@ const Concepts = () => {
   const IS_DEV = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
   if (!user && !IS_DEV) return <Navigate to="/login" replace />;
 
-  const activePremadeList = mode === "code" ? premadeCode : premadeConcepts;
+  const activePremadeList = premadeItems;
 
   return (
     <div className="px-6 py-12">
@@ -106,23 +96,6 @@ const Concepts = () => {
         <p className="mt-2 text-muted-foreground">
           Pick a topic below and watch an AI-generated animated explanation.
         </p>
-
-        {/* Category tabs */}
-        <div className="mt-8 flex gap-2">
-          {(["concept", "code"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
-                mode === m
-                  ? "bg-accent text-accent-foreground shadow-md shadow-accent/20"
-                  : "bg-secondary text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {m === "concept" ? "📚 Concepts" : "💻 Code"}
-            </button>
-          ))}
-        </div>
 
         {/* Premade video grid */}
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -149,7 +122,7 @@ const Concepts = () => {
               <div>
                 <span className="font-semibold">{item.label}</span>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {mode === "concept" ? "Animated concept breakdown" : "Step-by-step code walkthrough"}
+                  Animated concept breakdown
                 </p>
               </div>
               {selectedPremade === item.id && (
