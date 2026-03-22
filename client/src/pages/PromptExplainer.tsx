@@ -1,11 +1,11 @@
 /**
- * Repo Explainer page — fetches a job by ID and renders the React Flow walkthrough.
- * Route: /repo/:jobId
+ * Prompt Explainer page — fetches a job by ID and renders the scene-based walkthrough.
+ * Route: /prompt/:jobId
  */
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { Loader2, ArrowLeft } from "lucide-react";
-import RepoPlayer from "@/components/repo-explainer/RepoPlayer";
+import PromptPlayer from "@/components/prompt-explainer/PromptPlayer";
 import { API_BASE } from "@/lib/utils";
 import { getCookingMessage } from "@/lib/cooking-messages";
 
@@ -16,16 +16,15 @@ interface JobData {
   status: string;
   progress: string;
   job_type: string | null;
-  architecture: any;
+  explanation: any;
   storyboard: any;
   narration: any;
   tts_script: any;
   error: string | null;
 }
 
-export default function RepoExplainer() {
+export default function PromptExplainer() {
   const { jobId } = useParams<{ jobId: string }>();
-  const navigate = useNavigate();
   const [job, setJob] = useState<JobData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cookingTick, setCookingTick] = useState(0);
@@ -100,24 +99,12 @@ export default function RepoExplainer() {
     );
   }
 
-  // If this is a prompt job, redirect to the prompt explainer page
-  if (job?.job_type === "prompt" || job?.job_type === "code") {
-    navigate(`/prompt/${jobId}`, { replace: true });
-    return null;
-  }
-
-  // If this is a concept/algo job, redirect to the concept explainer page
-  if (job?.job_type === "concept_algo") {
-    navigate(`/concept/${jobId}`, { replace: true });
-    return null;
-  }
-
-  // Repo job done — render player
-  if (job?.architecture && job?.storyboard && job?.narration) {
+  // Prompt job done — render player
+  if (job?.explanation && job?.storyboard && job?.narration) {
     return (
       <div className="h-[calc(100vh-80px)]">
-        <RepoPlayer
-          architecture={job.architecture}
+        <PromptPlayer
+          explanation={job.explanation}
           storyboard={job.storyboard}
           narration={job.narration}
           jobId={jobId}

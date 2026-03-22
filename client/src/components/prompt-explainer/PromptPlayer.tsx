@@ -1,17 +1,17 @@
 /**
- * Full narrated playback controller for repo explanations.
+ * Full narrated playback controller for prompt/concept explanations.
  *
  * Playback sequence:
- *   1. Avatar intro video
+ *   1. Avatar intro video (if available)
  *   2. Scene-by-scene: React Flow visualization + TTS audio per scene
- *   3. Avatar outro video
+ *   3. Avatar outro video (if available)
  *
  * Auto-advances when each audio/video finishes.
  * Falls back to timer-based advancement if no audio available.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
-import RepoExplainerFlow from "./RepoExplainerFlow";
+import PromptExplainerFlow from "./PromptExplainerFlow";
 import { API_BASE } from "@/lib/utils";
 
 type PlaybackPhase =
@@ -28,8 +28,8 @@ interface Narration {
   outro_video_url?: string;
 }
 
-interface RepoPlayerProps {
-  architecture: any;
+interface PromptPlayerProps {
+  explanation: any;
   storyboard: any;
   narration: Narration;
   jobId?: string;
@@ -37,7 +37,7 @@ interface RepoPlayerProps {
 
 const FALLBACK_SCENE_DURATION = 6000;
 
-export default function RepoPlayer({ architecture, storyboard, narration, jobId }: RepoPlayerProps) {
+export default function PromptPlayer({ explanation, storyboard, narration, jobId }: PromptPlayerProps) {
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState<PlaybackPhase>({ kind: "intro" });
   const [autoPlay, setAutoPlay] = useState(true);
@@ -50,9 +50,7 @@ export default function RepoPlayer({ architecture, storyboard, narration, jobId 
   const hasIntroVideo = !!narration.intro_video_url;
   const hasOutroVideo = !!narration.outro_video_url;
 
-  // Build a lookup from scene_id → narration entry so we always match
-  // the correct audio to the correct storyboard scene, even if the
-  // narration array has fewer/reordered entries.
+  // Build a lookup from scene_id → narration entry
   const narrationBySceneId = useMemo(() => {
     const map = new Map<string, { narration: string; audio_url?: string }>();
     for (const s of narration.scenes) {
@@ -108,18 +106,16 @@ export default function RepoPlayer({ architecture, storyboard, narration, jobId 
     if (audioUrl && audioRef.current) {
       audioRef.current.src = audioUrl;
       audioRef.current.play().catch(() => {
-        // Audio play failed (user hasn't interacted) — fall back to timer
         timerRef.current = setTimeout(advanceToNext, FALLBACK_SCENE_DURATION);
       });
     } else {
-      // No audio for this scene — use timer
       timerRef.current = setTimeout(advanceToNext, FALLBACK_SCENE_DURATION);
     }
 
     return clearTimer;
   }, [phase, autoPlay, storyboard.scenes, narrationBySceneId, advanceToNext, clearTimer]);
 
-  // Manual scene control (when not autoplaying)
+  // Manual scene control
   const goToScene = useCallback((index: number) => {
     clearTimer();
     if (audioRef.current) {
@@ -146,19 +142,16 @@ export default function RepoPlayer({ architecture, storyboard, narration, jobId 
   const toggleAutoPlay = useCallback(() => {
     setAutoPlay((prev) => {
       if (prev) {
-        // Pausing — also pause PiP avatar video
         clearTimer();
         if (audioRef.current) audioRef.current.pause();
         if (pipVideoRef.current) pipVideoRef.current.pause();
       } else {
-        // Resuming — also resume PiP avatar video
         if (pipVideoRef.current) pipVideoRef.current.play().catch(() => {});
       }
       return !prev;
     });
   }, [clearTimer]);
 
-  // Restart
   const handleRestart = useCallback(() => {
     clearTimer();
     if (audioRef.current) {
@@ -171,7 +164,6 @@ export default function RepoPlayer({ architecture, storyboard, narration, jobId 
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  // Hidden audio element for scene narration
   const audioElement = (
     <audio
       ref={audioRef}
@@ -180,7 +172,7 @@ export default function RepoPlayer({ architecture, storyboard, narration, jobId 
     />
   );
 
-  // Picture-in-picture avatar — zoomed to face/shoulders (top ~55% of frame)
+  // Picture-in-picture avatar
   const pipAvatar = hasIntroVideo && phase.kind === "scene" ? (
     <div className="absolute bottom-4 right-4 z-50 h-40 w-32 overflow-hidden rounded-2xl border-2 border-white/20 shadow-2xl shadow-black/50 bg-black">
       <video
@@ -196,13 +188,13 @@ export default function RepoPlayer({ architecture, storyboard, narration, jobId 
     </div>
   ) : null;
 
-  // Start screen — required for browser autoplay policy (needs user click)
+  // Start screen
   if (!started) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 bg-gray-950">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white">{architecture.repo_name}</h2>
-          <p className="mt-2 text-sm text-white/50 max-w-md">{architecture.summary}</p>
+          <h2 className="text-2xl font-bold text-white">{explanation.title}</h2>
+          <p className="mt-2 text-sm text-white/50 max-w-md">{explanation.summary}</p>
         </div>
         <button
           onClick={() => setStarted(true)}
@@ -326,8 +318,8 @@ export default function RepoPlayer({ architecture, storyboard, narration, jobId 
 
       {/* React Flow canvas */}
       <div className="flex-1">
-        <RepoExplainerFlow
-          architecture={architecture}
+        <PromptExplainerFlow
+          explanation={explanation}
           storyboard={storyboard}
           activeSceneIndex={sceneIndex}
         />

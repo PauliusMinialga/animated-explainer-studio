@@ -24,6 +24,8 @@ class Mood(str, Enum):
 class JobType(str, Enum):
     repo = "repo"
     code = "code"
+    prompt = "prompt"
+    concept_algo = "concept_algo"
 
 
 class GenerateRequest(BaseModel):
@@ -58,13 +60,15 @@ class JobResponse(BaseModel):
     status: JobStatus
     progress: Optional[str] = None
     job_type: Optional[JobType] = None
-    # Code path (Manim)
+    # Code path (legacy Manim — deprecated)
     animation_url: Optional[str] = None
     final_url: Optional[str] = None
     # Repo path (React Flow)
     architecture: Optional[dict[str, Any]] = None
     storyboard: Optional[dict[str, Any]] = None
     narration: Optional[dict[str, Any]] = None
+    # Prompt path (scene-based explanation)
+    explanation: Optional[dict[str, Any]] = None
     # Shared
     tts_script: Optional[TTSScriptResponse] = None
     error: Optional[str] = None

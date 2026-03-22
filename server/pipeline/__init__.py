@@ -2,8 +2,8 @@
 Pipeline package for the Animated Explainer Studio backend.
 
 Contains two main paths:
-- Code/concept explanation: scripts.py → manim_render.py → veed_pipeline.py → final_merge.py
-- Repo explanation: enrich.py → repo_analysis.py → repo_storyboard.py → repo_narration.py
+- Prompt explanation: enrich.py → prompt_analysis.py → prompt_storyboard.py → prompt_narration.py
+- Repo explanation:   enrich.py → repo_analysis.py → repo_storyboard.py → repo_narration.py
 """
 
 import re

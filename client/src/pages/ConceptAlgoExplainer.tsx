@@ -1,11 +1,10 @@
 /**
- * Repo Explainer page — fetches a job by ID and renders the React Flow walkthrough.
- * Route: /repo/:jobId
+ * Concept / Algorithm Explainer page — plays a single-scene Manim animation video.
+ * Route: /concept/:jobId
  */
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft } from "lucide-react";
-import RepoPlayer from "@/components/repo-explainer/RepoPlayer";
+import { useParams, Link } from "react-router-dom";
+import { Loader2, ArrowLeft, Download } from "lucide-react";
 import { API_BASE } from "@/lib/utils";
 import { getCookingMessage } from "@/lib/cooking-messages";
 
@@ -16,16 +15,14 @@ interface JobData {
   status: string;
   progress: string;
   job_type: string | null;
-  architecture: any;
-  storyboard: any;
-  narration: any;
-  tts_script: any;
+  animation_url: string | null;
+  final_url: string | null;
+  tts_script: { intro: string; info: string; outro: string } | null;
   error: string | null;
 }
 
-export default function RepoExplainer() {
+export default function ConceptAlgoExplainer() {
   const { jobId } = useParams<{ jobId: string }>();
-  const navigate = useNavigate();
   const [job, setJob] = useState<JobData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cookingTick, setCookingTick] = useState(0);
@@ -100,35 +97,47 @@ export default function RepoExplainer() {
     );
   }
 
-  // If this is a prompt job, redirect to the prompt explainer page
-  if (job?.job_type === "prompt" || job?.job_type === "code") {
-    navigate(`/prompt/${jobId}`, { replace: true });
-    return null;
-  }
-
-  // If this is a concept/algo job, redirect to the concept explainer page
-  if (job?.job_type === "concept_algo") {
-    navigate(`/concept/${jobId}`, { replace: true });
-    return null;
-  }
-
-  // Repo job done — render player
-  if (job?.architecture && job?.storyboard && job?.narration) {
+  // Done — play video
+  const videoUrl = job?.final_url || job?.animation_url;
+  if (videoUrl) {
     return (
-      <div className="h-[calc(100vh-80px)]">
-        <RepoPlayer
-          architecture={job.architecture}
-          storyboard={job.storyboard}
-          narration={job.narration}
-          jobId={jobId}
-        />
+      <div className="flex h-[calc(100vh-80px)] flex-col items-center justify-center gap-6 bg-gray-950 px-4">
+        <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
+          <div className="relative aspect-video">
+            <video
+              src={videoUrl}
+              controls
+              autoPlay
+              playsInline
+              className="h-full w-full object-contain"
+            />
+          </div>
+          <div className="flex items-center justify-between border-t border-white/10 px-6 py-4">
+            <p className="text-sm font-medium text-white/70">Concept Explanation</p>
+            <div className="flex items-center gap-3">
+              <a
+                href={`${API_BASE}/download/${jobId}`}
+                download
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+              >
+                <Download className="h-4 w-4" /> Download Video
+              </a>
+              <Link
+                to="/"
+                className="flex items-center gap-1.5 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/10 transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" /> Back
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-[80vh] items-center justify-center">
-      <p className="text-white/40 text-sm">No data available</p>
+      <p className="text-white/40 text-sm">No video available</p>
     </div>
   );
 }

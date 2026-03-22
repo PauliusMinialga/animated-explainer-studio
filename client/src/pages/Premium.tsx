@@ -109,6 +109,16 @@ const Premium = () => {
           return;
         }
 
+        if (data.job_type === "concept_algo" && data.backend_job_id) {
+          navigate(`/concept/${data.backend_job_id}`);
+          return;
+        }
+
+        if (data.job_type === "prompt" && data.backend_job_id) {
+          navigate(`/prompt/${data.backend_job_id}`);
+          return;
+        }
+
         const { data: videoData } = await supabase
           .from("generated_videos")
           .select("video_url")
@@ -149,6 +159,16 @@ const Premium = () => {
 
           if (data.job_type === "repo") {
             navigate(`/repo/${jobId}`);
+            return;
+          }
+
+          if (data.job_type === "concept_algo") {
+            navigate(`/concept/${jobId}`);
+            return;
+          }
+
+          if (data.job_type === "prompt") {
+            navigate(`/prompt/${jobId}`);
             return;
           }
 

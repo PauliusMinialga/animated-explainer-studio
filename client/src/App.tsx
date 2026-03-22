@@ -12,6 +12,8 @@ import Profile from "./pages/Profile";
 import Premium from "./pages/Premium";
 import Concepts from "./pages/Concepts";
 import RepoExplainer from "./pages/RepoExplainer";
+import PromptExplainer from "./pages/PromptExplainer";
+import ConceptAlgoExplainer from "./pages/ConceptAlgoExplainer";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +34,8 @@ const App = () => (
               <Route path="/concepts" element={<Concepts />} />
               <Route path="/premium" element={<Premium />} />
               <Route path="/repo/:jobId" element={<RepoExplainer />} />
+              <Route path="/prompt/:jobId" element={<PromptExplainer />} />
+              <Route path="/concept/:jobId" element={<ConceptAlgoExplainer />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
