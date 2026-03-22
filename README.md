@@ -1,4 +1,4 @@
-# Animated Explainer Studio
+# 🎬 Animated Explainer Studio
 
 AI-powered visual explanations for **code snippets**, **programming concepts**, and **GitHub repositories**.
 
@@ -6,244 +6,237 @@ Instead of forcing users to reconstruct a system from raw code, Animated Explain
 
 ---
 
-## Why we built this
+## 🎥 Demo
+
+Here is an example of a generated explanation (Bresenham algorithm):
+
+https://github.com/user-attachments/assets/049fd686-d5a1-4b41-accb-44a3d3328bec
+
+This demonstrates how the system explains an algorithm step by step, using animation and narration.
+
+⸻
+
+🚀 Why we built this
 
 Understanding code is still one of the slowest parts of software development.
 
 When you open a new function or a new repository, you usually have to:
-
-- read several files manually
-- infer structure from naming and imports
-- rebuild the system mentally
-- guess how components interact
+	•	read several files manually
+	•	infer structure from naming and imports
+	•	rebuild the system mentally
+	•	guess how components interact
 
 At the same time, AI is making code generation faster and more accessible.
 
-That shifts the skill that matters most:
+👉 The challenge is shifting.
 
-**the real challenge is no longer only writing code — it is understanding architecture, design decisions, and system flow.**
+It’s no longer just about writing code — it’s about understanding architecture, systems, and design decisions.
 
 Animated Explainer Studio is designed for that shift.
 
----
+⸻
 
-## What problem it solves
+💡 What problem it solves
 
 This project helps reduce the time it takes to understand:
+	•	a function
+	•	a code snippet
+	•	a concept (arrays, pointers, memory, algorithms…)
+	•	a complete GitHub repository architecture
 
-- a function
-- a code snippet
-- a concept such as arrays, pointers, or memory allocation
-- a complete GitHub repository architecture
+Instead of a static explanation, users get a visual, narrated, step-by-step walkthrough.
 
-Instead of a static explanation, the user gets a **visual and narrated walkthrough**.
+⸻
 
----
+🎯 Target audience
+	•	developers onboarding into a new codebase
+	•	students learning programming concepts
+	•	engineers reviewing unfamiliar logic
+	•	hackathon teams and interview candidates
+	•	anyone who wants a fast mental model of code
 
-## Target audience
+⸻
 
-We built this for:
+🧠 Product modes
 
-- developers onboarding into a new codebase
-- students learning programming concepts
-- engineers reviewing unfamiliar logic quickly
-- hackathon teams and technical interview candidates
-- anyone who wants a faster mental model of how code works
+✏️ Prompt Mode
 
----
+Explain:
+	•	code snippets
+	•	functions
+	•	algorithms
+	•	programming concepts
 
-## Product modes
-
-### 1. Prompt Mode
-
-Prompt Mode explains:
-
-- code snippets
-- functions or methods
-- technical concepts and algorithms
-
-Depending on the request, the backend routes the input into the right explanation path:
-
-- **Code explanation** → structured visual scenes
-- **Concept / algorithm explanation** → constrained animation path for concepts that benefit from visual motion
+The system automatically routes the request:
+	•	Code explanation → structured visual scenes (React Flow)
+	•	Concept / algorithm explanation → animation-based visualization (Manim)
 
 Examples:
+	•	“Explain this function”
+	•	“Explain binary search”
+	•	“Explain malloc and free”
+	•	“Explain arrays”
 
-- “Explain this function”
-- “Explain how binary search works”
-- “Explain how malloc and free work”
-- “Explain arrays and indexing”
+If a GitHub repo is provided, it is used as context, not as the main subject.
 
-If a GitHub repo link is included, it is used as **context** to better understand the snippet, without switching into full repository mode.
+⸻
 
----
+🏗️ Repo Mode (🔥 core feature)
 
-### 2. Repo Mode
+Provide a GitHub repository, and the system:
+	•	extracts main components
+	•	identifies responsibilities
+	•	maps interactions and data flow
+	•	builds a structured explanation
 
-Repo Mode takes a GitHub repository URL and explains the project as a system.
+Instead of reading folders, you see the architecture.
 
-Instead of listing folders, it reconstructs the architecture:
+👉 This is the strongest “wow” part of the project.
 
-- main components
-- responsibilities
-- relationships
-- system flow
-- teaching sequence
+⸻
 
-The result is a scene-by-scene visual explanation of the repository.
+⚙️ How it works
 
-This is the strongest “wow” mode of the project.
+Prompt Mode
+	1.	Analyze prompt / snippet
+	2.	Classify: code vs concept
+	3.	Generate structured explanation
+	4.	Render scenes or animation
+	5.	Generate narration + video
+	6.	Output playable/downloadable result
 
----
+⸻
 
-## How it works
+Repo Mode (AI pipeline)
+	1.	Ingest repository
+	2.	Extract architecture (components, flows, responsibilities)
+	3.	Build structured representation
+	4.	Convert into a teaching storyboard
+	5.	Render scene-by-scene explanation (React Flow)
+	6.	Generate narration + video
 
-### Prompt Mode flow
+👉 The key idea: we don’t explain files — we explain systems
 
-1. User submits a prompt, snippet, or concept
-2. Backend analyzes the request
-3. The system decides whether the input is:
-   - a code explanation
-   - or a concept / algorithm explanation
-4. The explanation is generated
-5. A narrated video is produced
-6. The user can watch or download the final result
+⸻
 
----
+🧩 Design approach
 
-### Repo Mode flow
+We don’t treat code as raw text.
 
-1. User submits a GitHub repository URL
-2. Repository content is ingested and summarized
-3. AI extracts:
-   - architectural components
-   - relationships
-   - flows
-4. A second step turns that into a teaching storyboard
-5. The frontend renders this as a scene-based visual walkthrough
-6. Narration and video output complete the experience
+We transform it into:
+	•	structured representations
+	•	logical components
+	•	visual flows
+	•	progressive explanations
 
----
+This allows:
+	•	better comprehension
+	•	clearer mental models
+	•	faster onboarding
 
-## Design approach
+⸻
 
-We intentionally avoided treating the repository as a raw file tree.
+🛠️ Tech stack
 
-Instead, the system converts technical input into **intermediate structured representations** first.
+Frontend
+	•	Vite
+	•	React
+	•	TypeScript
+	•	Tailwind CSS
+	•	React Flow
 
-### For Repo Mode
+Used for:
+	•	scene rendering
+	•	visual architecture mapping
+	•	interactive explanations
 
-The pipeline is roughly:
+⸻
 
-- repository ingestion
-- architecture extraction
-- storyboard generation
-- narration assembly
-- scene rendering
+Backend
+	•	FastAPI
+	•	Python
+	•	Mistral (LLM)
+	•	Manim (animation)
+	•	Runware / fal.ai (video & avatar)
+	•	ffmpeg (final composition)
+	•	Supabase
 
-This lets us explain a project **as a system**, not just as a list of folders.
+Handles:
+	•	prompt + repo analysis
+	•	architecture extraction
+	•	storyboard generation
+	•	narration generation
+	•	video assembly
 
-### For Prompt Mode
+⸻
 
-The system distinguishes between:
+🔍 Why React Flow
 
-- code that benefits from structured scene breakdowns
-- concepts and algorithms that benefit from animated visualization
+We moved away from generated animation scripts for repo explanations.
 
-This gives us a more appropriate explanation style depending on what the user is trying to learn.
+React Flow gives:
+	•	stable layouts
+	•	clean architecture visualization
+	•	step-by-step focus
+	•	deterministic rendering (critical for demo reliability)
 
----
+⸻
 
-## Tech stack
+🎬 Why Manim (selectively)
 
-### Frontend
+Manim is used only when motion is essential:
+	•	algorithms (e.g. Bresenham)
+	•	memory behavior
+	•	arrays / pointers
+	•	dynamic processes
 
-- **Vite**
-- **React**
-- **TypeScript**
-- **Tailwind CSS**
-- **React Flow**
+To avoid instability:
+👉 only one controlled animation flow per explanation
 
-The frontend is responsible for rendering structured, scene-based explanations in a clean visual way.
+⸻
 
----
-
-### Backend
-
-- **FastAPI**
-- **Python**
-- **Mistral**
-- **Manim**
-- **Runware**
-- **fal.ai / VEED Fabric**
-- **ffmpeg**
-- **Supabase**
-
-The backend handles:
-
-- prompt and repo analysis
-- architecture/storyboard generation
-- narration assembly
-- TTS / avatar video generation
-- final media composition
-
----
-
-## Why React Flow
-
-For repository explanations, we moved away from free-form generated animation scripts and toward a deterministic scene renderer.
-
-React Flow gives us:
-
-- stable layouts
-- step-by-step focus
-- highlighted relationships
-- clearer architectural explanations
-- more predictable visual output for demos
-
-This made Repo Mode significantly more robust and more readable.
-
----
-
-## Why Manim is still used selectively
-
-Manim remains useful for certain concept-heavy explanations where motion matters, for example:
-
-- memory allocation
-- arrays
-- pointer-like behavior
-- algorithm progression
-
-To avoid unstable overlapping animations, this path is intentionally constrained.
-
----
-
-## Monetization idea
-
-We designed the product with a **freemium model** in mind.
-
-### Free tier
-- basic prompt explanations
-- simple repo exploration
-- lightweight use cases
-
-### Premium tier
-- deeper analysis
-- more advanced concept explanations
-- richer visualizations
-- enhanced educational modes
-
-This makes the product accessible while keeping a clear path to monetization.
-
----
-
-## Repository structure
-
-```text
+📁 Repository structure
+```
 .
-├── client/
-├── server/
-├── supabase/
+├── client/      # frontend (React + React Flow)
+├── server/      # backend (AI + pipelines + video)
+├── supabase/    # storage / backend support
 ├── .env.template
 ├── package.json
 └── requirements.txt
+```
+
+⸻
+
+🚀 What makes this project interesting
+
+This is not just AI summarizing code.
+
+It is a pipeline that:
+	1.	understands structure
+	2.	converts it into a teaching sequence
+	3.	renders it visually
+	4.	narrates it as a guided experience
+
+👉 The goal is not to read code faster
+👉 The goal is to understand systems faster
+
+⸻
+
+🔮 Possibilities
+	•	developer onboarding tools
+	•	education platforms
+	•	interview preparation
+	•	documentation automation
+	•	AI-assisted code review
+	•	architecture visualization for teams
+
+⸻
+
+🎯 Demo tip
+
+If you are reviewing this project:
+
+👉 Try Repo Mode first
+
+It best demonstrates the full vision.
