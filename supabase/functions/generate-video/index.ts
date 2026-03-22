@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { topic, mode, avatar, mood, level, github_url } = await req.json()
+    const { topic, mode, avatar, voice, robotic, avatar_image_url, mood, level, github_url } = await req.json()
 
     if (!topic || !mode) {
       return new Response(JSON.stringify({ error: 'Topic and mode are required' }), {
@@ -76,6 +76,10 @@ Deno.serve(async (req) => {
           mode: 'concept',   // backend routes based on prompt content, not mode
           mood: mood || 'friendly',
           level: level || 'beginner',
+          avatar: avatar || null,
+          voice: voice || null,
+          robotic: robotic || false,
+          avatar_image_url: avatar_image_url || null,
         }),
       }).catch(err => console.error('Failed to call backend:', err))
     } else {

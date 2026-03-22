@@ -1,31 +1,20 @@
+/** Home page — main prompt input for both code snippets and GitHub repo URLs. */
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Play, Code, Sparkles, Video, Loader2, Check, X, Github } from "lucide-react";
+import { API_BASE } from "@/lib/utils";
+import { getCookingMessage } from "@/lib/cooking-messages";
 
 const logoNames = ["TechCorp", "DevStudio", "CodeBase", "Synthetix", "NeuralNet", "DataFlow", "CloudOps"];
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://vizifi.onrender.com";
-
-const PROGRESS_LABELS: Record<string, string> = {
-  "Queued": "Queued…",
-  "Ingesting GitHub repo…": "Fetching repository…",
-  "Analyzing architecture…": "Analyzing architecture…",
-  "Generating storyboard…": "Generating storyboard…",
-  "Assembling narration…": "Assembling narration…",
-  "Generating scene audio…": "Generating voiceover…",
-  "Generating avatar videos…": "Creating avatar…",
-  "Enriching prompt…": "Enriching prompt…",
-  "Generating scripts…": "Generating animation…",
-  "Rendering animation…": "Rendering animation…",
-  "Generating avatar & voice…": "Adding voiceover…",
-  "Assembling final video…": "Assembling video…",
-};
+const COOKING_ROTATE_INTERVAL = 4000; // rotate fun message every 4s
 
 const Index = () => {
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState("");
+  const [cookingTick, setCookingTick] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [doneVideo, setDoneVideo] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -35,6 +24,13 @@ const Index = () => {
   useEffect(() => {
     return () => { if (pollRef.current) clearTimeout(pollRef.current); };
   }, []);
+
+  // Rotate cooking message while generating
+  useEffect(() => {
+    if (!generating) return;
+    const id = setInterval(() => setCookingTick((t) => t + 1), COOKING_ROTATE_INTERVAL);
+    return () => clearInterval(id);
+  }, [generating]);
 
   const handleGenerate = async () => {
     const input = prompt.trim();
@@ -61,7 +57,7 @@ const Index = () => {
           const r = await fetch(`${API_BASE}/jobs/${job_id}`);
           const data = await r.json();
 
-          setProgress(PROGRESS_LABELS[data.progress] || data.progress || "Processing…");
+          setProgress(data.progress || "Processing…");
 
           if (data.status === "failed") {
             setError(data.error || "Generation failed");
@@ -174,11 +170,13 @@ const Index = () => {
               ))}
             </div>
 
-            {/* Progress */}
+            {/* Progress — fun rotating cooking messages */}
             {generating && (
               <div className="mt-4 flex items-center gap-3 rounded-xl border bg-card p-4">
-                <Loader2 className="h-4 w-4 animate-spin text-accent shrink-0" />
-                <span className="text-sm text-muted-foreground">{progress}</span>
+                <span className="text-lg shrink-0">🧑‍🍳</span>
+                <span className="text-sm text-muted-foreground transition-all duration-300">
+                  {getCookingMessage(progress, cookingTick)}
+                </span>
               </div>
             )}
 

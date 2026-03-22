@@ -1,3 +1,4 @@
+/** Concepts page — browse pre-made code/concept demo videos (no backend generation). */
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Crown, Download, Loader2, Play } from "lucide-react";
 import { Navigate } from "react-router-dom";

@@ -39,12 +39,12 @@ __pycache__/
 env
 
 # Virtual env
-server/the_project/manim-env/
+server/manim-env/
 
-# Manim renders
+# Manim renders & job output
 media/
 animations/
-output/**/*.mp4
+server/output/
 
 # Claude
 .claude_history

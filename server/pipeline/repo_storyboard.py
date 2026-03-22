@@ -7,9 +7,9 @@ that form a teaching progression: overview → flow → component focuses → re
 
 import json
 import logging
-import re
 
 from .repo_models import Architecture, Storyboard, Scene, ScenePanel
+from . import strip_json_fences
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +66,6 @@ Return format:
 """
 
 
-def _strip_json(raw: str) -> str:
-    raw = re.sub(r"^```[a-z]*\n?", "", raw.strip())
-    return re.sub(r"\n?```$", "", raw.strip())
-
-
 def generate_storyboard(architecture: Architecture) -> Storyboard:
     """Call Mistral to generate a teaching storyboard from the architecture."""
     from .scripts import _chat
@@ -87,7 +82,7 @@ def generate_storyboard(architecture: Architecture) -> Storyboard:
     )
 
     try:
-        data = json.loads(_strip_json(raw))
+        data = json.loads(strip_json_fences(raw))
     except json.JSONDecodeError as exc:
         logger.warning("Storyboard LLM returned invalid JSON, using fallback: %s", exc)
         return _fallback_storyboard(architecture)

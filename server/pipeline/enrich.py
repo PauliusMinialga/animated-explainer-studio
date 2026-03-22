@@ -171,41 +171,13 @@ async def _fetch_context(url: str) -> str:
 
 
 async def _fetch_github_repo(owner: str, repo: str) -> str:
-    """Fetch README + file tree summary from GitHub API."""
-    headers = {"Accept": "application/vnd.github.v3+json"}
-    async with httpx.AsyncClient(timeout=15) as client:
-        readme_text = ""
-        try:
-            r = await client.get(
-                f"https://api.github.com/repos/{owner}/{repo}/readme",
-                headers=headers,
-            )
-            if r.status_code == 200:
-                import base64
-                content = r.json().get("content", "")
-                readme_text = base64.b64decode(content).decode("utf-8", errors="ignore")
-                readme_text = readme_text[:3000]
-        except Exception:
-            pass
-
-        tree_text = ""
-        try:
-            r = await client.get(
-                f"https://api.github.com/repos/{owner}/{repo}/contents",
-                headers=headers,
-            )
-            if r.status_code == 200:
-                files = [item["name"] for item in r.json() if isinstance(item, dict)]
-                tree_text = "Files: " + ", ".join(files[:30])
-        except Exception:
-            pass
-
-    parts = []
-    if tree_text:
-        parts.append(tree_text)
-    if readme_text:
-        parts.append(f"README:\n{readme_text}")
-    return "\n\n".join(parts)
+    """Lightweight repo context for the code-snippet enrichment path.
+    Reuses the authenticated helpers from the repo pipeline."""
+    url = f"https://github.com/{owner}/{repo}"
+    try:
+        return await ingest_github_repo(url)
+    except Exception:
+        return ""
 
 
 async def _fetch_webpage(url: str) -> str:

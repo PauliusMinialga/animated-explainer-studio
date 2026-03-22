@@ -1,12 +1,12 @@
 """
-Generate endpoint with async job tracking.
+Generate endpoint — main entry point for both explanation flows.
 
 POST /generate   → starts background pipeline, returns job_id immediately
 GET  /jobs/{id}  → poll for status, progress, results
 
-Pipeline:
-  - If prompt is a github.com URL → repo analysis → storyboard → narration (React Flow)
-  - Otherwise → generate_scripts → Manim render → VEED → final merge (video)
+Two pipelines:
+  - Repo path:  GitHub URL → repo analysis → storyboard → narration (React Flow on frontend)
+  - Code path:  code/concept prompt → Manim render → VEED avatar → final video merge
 """
 
 import asyncio

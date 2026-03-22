@@ -1,12 +1,14 @@
+/** Premium page — avatar/voice selection and generation with Supabase polling. */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Check, Crown, Download, Play, Square, X } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { API_BASE } from "@/lib/utils";
+import { getCookingMessage } from "@/lib/cooking-messages";
 
 const IS_DEV = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-const API_BASE = import.meta.env.VITE_API_URL || "https://vizifi.onrender.com";
 
 const avatars = [
   { id: "c3po", name: "C-3PO", image: "/c3po.jpg", position: "center" },
@@ -32,19 +34,7 @@ const RUNWARE_VOICES = [
 
 const POLL_INTERVAL = 3000;
 const POLL_TIMEOUT = 10 * 60 * 1000; // 10 minutes — avatar gen can be slow
-
-const COOKING_MESSAGES: Record<string, string> = {
-  pending:            "Gathering your repo data…",
-  generating_script:  "Analysing architecture & writing the script…",
-  rendering:          "Rendering the animation…",
-  adding_voiceover:   "Generating voice & avatar…",
-  finalizing:         "Assembling the final video…",
-  done:               "All done! 🎉",
-  // local backend status aliases
-  in_progress:        "Analysing architecture & writing the script…",
-};
-
-const DEFAULT_COOKING_MSG = "Warming up the AI kitchen…";
+const COOKING_ROTATE_INTERVAL = 4000; // rotate fun message every 4 seconds
 
 const Premium = () => {
   const { user, loading, isPremium, profileLoading } = useAuth();
@@ -73,6 +63,9 @@ const Premium = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
+
+  // Rotating cooking message tick
+  const [cookingTick, setCookingTick] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -176,6 +169,13 @@ const Premium = () => {
   useEffect(() => {
     return () => { stopPolling(); };
   }, [stopPolling]);
+
+  // Rotate cooking message while generating
+  useEffect(() => {
+    if (!generating) return;
+    const id = setInterval(() => setCookingTick((t) => t + 1), COOKING_ROTATE_INTERVAL);
+    return () => clearInterval(id);
+  }, [generating]);
 
   // Voice preview
   const handlePreviewVoice = async () => {
@@ -493,7 +493,7 @@ const Premium = () => {
                 <span className="absolute inset-0 flex items-center justify-center text-2xl">🧑‍🍳</span>
               </div>
               <p className="text-lg font-semibold text-foreground transition-all duration-500">
-                {COOKING_MESSAGES[currentStatus ?? "pending"] ?? DEFAULT_COOKING_MSG}
+                {getCookingMessage(currentStatus, cookingTick)}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
                 This usually takes 2–4 minutes. Grab a coffee ☕

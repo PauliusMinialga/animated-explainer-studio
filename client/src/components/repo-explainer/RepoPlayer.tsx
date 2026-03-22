@@ -9,7 +9,7 @@
  * Auto-advances when each audio/video finishes.
  * Falls back to timer-based advancement if no audio available.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RepoExplainerFlow from "./RepoExplainerFlow";
 
 type PlaybackPhase =
@@ -40,11 +40,23 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
   const [autoPlay, setAutoPlay] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const pipVideoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const totalScenes = storyboard.scenes.length;
   const hasIntroVideo = !!narration.intro_video_url;
   const hasOutroVideo = !!narration.outro_video_url;
+
+  // Build a lookup from scene_id → narration entry so we always match
+  // the correct audio to the correct storyboard scene, even if the
+  // narration array has fewer/reordered entries.
+  const narrationBySceneId = useMemo(() => {
+    const map = new Map<string, { narration: string; audio_url?: string }>();
+    for (const s of narration.scenes) {
+      map.set(s.scene_id, s);
+    }
+    return map;
+  }, [narration.scenes]);
 
   // Determine starting phase
   useEffect(() => {
@@ -82,11 +94,12 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
     });
   }, [autoPlay, totalScenes, hasOutroVideo, clearTimer]);
 
-  // Handle scene audio playback
+  // Handle scene audio playback — match by scene_id, not array index
   useEffect(() => {
     if (phase.kind !== "scene" || !autoPlay) return;
 
-    const sceneNarr = narration.scenes[phase.index];
+    const storyScene = storyboard.scenes[phase.index];
+    const sceneNarr = storyScene ? narrationBySceneId.get(storyScene.id) : undefined;
     const audioUrl = sceneNarr?.audio_url;
 
     if (audioUrl && audioRef.current) {
@@ -101,7 +114,7 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
     }
 
     return clearTimer;
-  }, [phase, autoPlay, narration.scenes, advanceToNext, clearTimer]);
+  }, [phase, autoPlay, storyboard.scenes, narrationBySceneId, advanceToNext, clearTimer]);
 
   // Manual scene control (when not autoplaying)
   const goToScene = useCallback((index: number) => {
@@ -130,9 +143,13 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
   const toggleAutoPlay = useCallback(() => {
     setAutoPlay((prev) => {
       if (prev) {
-        // Pausing
+        // Pausing — also pause PiP avatar video
         clearTimer();
         if (audioRef.current) audioRef.current.pause();
+        if (pipVideoRef.current) pipVideoRef.current.pause();
+      } else {
+        // Resuming — also resume PiP avatar video
+        if (pipVideoRef.current) pipVideoRef.current.play().catch(() => {});
       }
       return !prev;
     });
@@ -159,6 +176,21 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
       style={{ display: "none" }}
     />
   );
+
+  // Picture-in-picture avatar — small corner window during scene phase
+  const pipAvatar = hasIntroVideo && phase.kind === "scene" ? (
+    <div className="absolute bottom-4 right-4 z-50 h-36 w-36 overflow-hidden rounded-2xl border-2 border-white/20 shadow-2xl shadow-black/50 bg-black">
+      <video
+        ref={pipVideoRef}
+        src={narration.intro_video_url}
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="h-full w-full object-cover"
+      />
+    </div>
+  ) : null;
 
   // Start screen — required for browser autoplay policy (needs user click)
   if (!started) {
@@ -234,8 +266,9 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
   const currentScene = storyboard.scenes[sceneIndex];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
       {audioElement}
+      {pipAvatar}
 
       {/* Narration text overlay at top */}
       <div className="shrink-0 border-b border-white/10 bg-black/40 px-6 py-3">

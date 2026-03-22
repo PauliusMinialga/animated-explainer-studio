@@ -10,9 +10,9 @@ Includes an LLM polish pass to remove repetition and ensure smooth transitions.
 
 import json
 import logging
-import re
 
 from .repo_models import Storyboard, RepoNarration, SceneNarration
+from . import strip_json_fences
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,13 @@ No markdown fences.
 
 
 def _polish_narration(narration: RepoNarration) -> RepoNarration:
-    """LLM pass to deduplicate and smooth the full narration script."""
+    """LLM pass to deduplicate and smooth the full narration script.
+
+    IMPORTANT: The returned narration always has exactly the same number of
+    scenes (and the same scene_ids in the same order) as the input.  If the
+    LLM drops or reorders scenes we fall back to the originals so that the
+    client can safely index narration and storyboard scenes by position.
+    """
     from .scripts import _chat
 
     narr_input = {
@@ -63,23 +69,30 @@ def _polish_narration(narration: RepoNarration) -> RepoNarration:
             user=_POLISH_PROMPT.format(narration_json=json.dumps(narr_input, indent=2)),
             temperature=0.3,
         )
-        # Strip markdown fences if present
-        cleaned = re.sub(r"^```(?:json)?\s*", "", raw)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-        data = json.loads(cleaned)
+        data = json.loads(strip_json_fences(raw))
+
+        # Build a lookup of polished narrations keyed by scene_id
+        polished_by_id = {
+            s.get("scene_id", ""): s.get("narration", "")
+            for s in data.get("scenes", [])
+        }
+
+        # Rebuild scenes list preserving the original order and count.
+        # Use polished text when available, fall back to original.
+        merged_scenes = []
+        for orig in narration.scenes:
+            text = polished_by_id.get(orig.scene_id, orig.narration)
+            merged_scenes.append(SceneNarration(scene_id=orig.scene_id, narration=text or orig.narration))
 
         polished = RepoNarration(
             intro=data.get("intro", narration.intro),
-            scenes=[
-                SceneNarration(
-                    scene_id=s.get("scene_id", f"scene_{i}"),
-                    narration=s.get("narration", ""),
-                )
-                for i, s in enumerate(data.get("scenes", []))
-            ],
+            scenes=merged_scenes,
             outro=data.get("outro", narration.outro),
         )
-        logger.info("[repo-narration] Polish pass succeeded — %d scenes", len(polished.scenes))
+        logger.info(
+            "[repo-narration] Polish pass succeeded — %d scenes (LLM returned %d, merged back to %d)",
+            len(polished.scenes), len(polished_by_id), len(merged_scenes),
+        )
         return polished
 
     except Exception as exc:

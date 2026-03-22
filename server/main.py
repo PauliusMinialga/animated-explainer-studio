@@ -1,3 +1,9 @@
+"""
+Main entry point for the backend server.
+
+Run with:  cd server && uvicorn main:app --reload
+"""
+
 import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError

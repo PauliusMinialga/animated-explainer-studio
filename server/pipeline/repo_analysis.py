@@ -7,9 +7,9 @@ describing components, relationships, and execution flows.
 
 import json
 import logging
-import re
 
 from .repo_models import Architecture, Component, Relationship, Flow
+from . import strip_json_fences
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +68,6 @@ Rules:
 """
 
 
-def _strip_json(raw: str) -> str:
-    """Remove markdown fences if present."""
-    raw = re.sub(r"^```[a-z]*\n?", "", raw.strip())
-    return re.sub(r"\n?```$", "", raw.strip())
-
-
 def analyze_repo(
     repo_content: str,
     mood: str = "friendly",
@@ -94,7 +88,7 @@ def analyze_repo(
     )
 
     try:
-        data = json.loads(_strip_json(raw))
+        data = json.loads(strip_json_fences(raw))
     except json.JSONDecodeError as exc:
         logger.error("Architecture LLM returned invalid JSON: %s\n%s", exc, raw[:500])
         raise ValueError(f"Architecture extraction failed: {exc}") from exc
