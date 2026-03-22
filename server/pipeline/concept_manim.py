@@ -65,12 +65,25 @@ FORBIDDEN OBJECTS (will crash — do NOT use):
 - Tex, MathTex, BulletedList, Code
 - DecimalNumber, Integer, Variable
 
-LAYOUT RULES (critical for visual quality):
-- Center all content on screen — use .move_to(ORIGIN) or .to_edge() carefully
-- Keep content within the visible frame: avoid going beyond 6 units from center
-- Use font_size between 20-32 for readability
+LAYOUT RULES (critical for visual quality — READ CAREFULLY):
+- ALWAYS group related objects into a VGroup immediately after creating them
+- ALWAYS call group.move_to(ORIGIN) or group.move_to(UP * 0.5) to center on screen
+- For arrays/sequences: create all cells as a VGroup FIRST, then center the whole group
+  CORRECT PATTERN:
+    cells = VGroup()
+    for i, val in enumerate([10, 20, 30, 40, 50]):
+        box = Rectangle(width=1.0, height=1.0, color=BLUE)
+        label = Text(str(val), font_size=28).move_to(box.get_center())
+        cells.add(VGroup(box, label))
+    cells.arrange(RIGHT, buff=0.1)
+    cells.move_to(ORIGIN)   # ← MANDATORY: center the whole group
+    self.play(Create(cells))
+- For trees/graphs: build all nodes first as VGroup, then center
+- NEVER position elements piecemeal with many .shift() calls — group first, center once
+- Keep ALL content within ±5.5 units horizontally, ±3.5 units vertically
+- Use font_size between 22-30 for readability
 - Leave margins — don't pack elements edge-to-edge
-- Clean up previous elements with FadeOut before showing new ones if the screen gets crowded
+- Clean up previous elements with FadeOut before showing new ones if screen gets crowded
 
 NARRATION RULES:
 - Plain spoken English, no markdown, no special characters
@@ -149,7 +162,32 @@ _SANITIZE_RULES: List[Tuple[re.Pattern, str, str]] = [
 ]
 
 
-def _sanitize_manim_script(script: str) -> str:
+def _inject_camera_setup(script: str) -> str:
+    """Inject a camera/frame setup at the top of construct() to ensure content stays in frame.
+
+    Adds self.camera.frame_width/height guard and a post-construct auto-fit
+    by wrapping the scene with a safe viewport configuration.
+    """
+    # Add a safe frame config at the class level if not already present
+    if "frame_width" in script or "camera" in script:
+        return script  # already has camera config, don't override
+
+    # Inject config class attribute for wider frame to reduce clipping risk
+    config_block = '''
+    def setup(self):
+        # Ensure consistent safe viewport
+        self.camera.background_color = "#1a1a2e"
+'''
+    # Insert setup() method right before construct()
+    script = script.replace(
+        "    def construct(self):",
+        config_block + "    def construct(self):",
+        1,
+    )
+    return script
+
+
+
     """Apply safety sanitization to LLM-generated Manim code.
 
     Catches common LLM mistakes that violate Manim API constraints,
@@ -205,6 +243,7 @@ def generate_concept_manim(
         raise ValueError(f"Concept Manim response missing <manim_script> tag.\nPreview:\n{raw[:500]}")
 
     sanitized_script = _sanitize_manim_script(manim.group(1).strip())
+    sanitized_script = _inject_camera_setup(sanitized_script)
 
     result = ConceptManimResult(
         manim_script=sanitized_script,

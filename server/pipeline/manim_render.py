@@ -47,6 +47,7 @@ async def render_manim(
         cmd = [
             sys.executable, "-m", "manim",
             "-ql",
+            "--resolution", "854,480",
             "--output_file", output_name,
             "--media_dir", str(media_dir),
             str(target),
