@@ -7,6 +7,7 @@ Writes temp files as needed, runs `manim -ql`, returns the path to the output mp
 
 import asyncio
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -52,18 +53,25 @@ async def render_manim(
             scene_class,
         ]
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
+        # Use subprocess.run in executor to avoid SIGTTOU when running under nohup.
+        # asyncio.create_subprocess_exec inherits the process group and triggers
+        # SIGTTOU when manim's rich library probes the terminal.
+        def _run_manim() -> subprocess.CompletedProcess:
+            return subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                close_fds=True,
+            )
 
-        if proc.returncode != 0:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _run_manim)
+
+        if result.returncode != 0:
             raise RuntimeError(
-                f"Manim render failed (exit {proc.returncode}):\n"
-                f"{stderr.decode()[-2000:]}"
+                f"Manim render failed (exit {result.returncode}):\n"
+                f"{result.stderr.decode()[-2000:]}"
             )
 
         # Locate output
