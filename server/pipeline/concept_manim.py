@@ -65,6 +65,16 @@ FORBIDDEN OBJECTS (will crash — do NOT use):
 - Tex, MathTex, BulletedList, Code
 - DecimalNumber, Integer, Variable
 
+TITLE RULE (critical — always follow this pattern):
+- If you show a title at the start, ALWAYS fade it out before the main animation begins
+  CORRECT PATTERN:
+    title = Text("Arrays", font_size=36, color=YELLOW).to_edge(UP)
+    self.play(Write(title))
+    self.wait(1)
+    self.play(FadeOut(title))   # ← MANDATORY before showing main content
+    # now show main animation below...
+- NEVER keep a title visible while other content is animating — it will overlap
+
 LAYOUT RULES (critical for visual quality — READ CAREFULLY):
 - ALWAYS group related objects into a VGroup immediately after creating them
 - ALWAYS call group.move_to(ORIGIN) or group.move_to(UP * 0.5) to center on screen
