@@ -177,9 +177,9 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
     />
   );
 
-  // Picture-in-picture avatar — small corner window during scene phase
+  // Picture-in-picture avatar — zoomed to face/shoulders (top ~55% of frame)
   const pipAvatar = hasIntroVideo && phase.kind === "scene" ? (
-    <div className="absolute bottom-4 right-4 z-50 h-36 w-36 overflow-hidden rounded-2xl border-2 border-white/20 shadow-2xl shadow-black/50 bg-black">
+    <div className="absolute bottom-4 right-4 z-50 h-40 w-32 overflow-hidden rounded-2xl border-2 border-white/20 shadow-2xl shadow-black/50 bg-black">
       <video
         ref={pipVideoRef}
         src={narration.intro_video_url}
@@ -188,6 +188,7 @@ export default function RepoPlayer({ architecture, storyboard, narration }: Repo
         muted
         playsInline
         className="h-full w-full object-cover"
+        style={{ objectPosition: "50% 5%", transform: "scale(1.7)", transformOrigin: "top center" }}
       />
     </div>
   ) : null;
