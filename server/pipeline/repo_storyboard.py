@@ -17,35 +17,42 @@ _STORYBOARD_PROMPT = """\
 You are an educational content designer creating an animated architecture walkthrough.
 
 Given the following repository architecture, produce a storyboard: an ordered sequence
-of 5–7 scenes that explain the system progressively.
+of 5–7 scenes that explain the system progressively, like a guided tree traversal.
 
 Architecture:
 {architecture_json}
 
-Scene progression should follow this pattern:
-1. Global overview — show all components, highlight the main ones
-2. Main execution flow — step through the primary flow, highlighting each component in order
-3–5. Component deep dives — focus on 2–3 key components or subsystems
-6. Recap — show everything again with the main takeaway
+Scene progression MUST follow this exact pattern:
+1. Global overview — all components visible and highlighted — camera_mode "fit"
+2–5. Component deep dives — traverse in tree order: start from leaf components
+     (those with no outgoing calls or dependencies), then work up through branches
+     toward root/entry components. Each scene focuses on ONE component.
+     - ALL components must remain visible (they form the background graph)
+     - highlighted_components: [the focused component] only
+     - highlighted_relationships: only relationships involving the focused component
+     - camera_mode "focus" with focus_component set
+6. Recap — all components visible and all highlighted — camera_mode "fit"
 
-For each scene, specify:
-- which components are visible (all or a subset)
-- which components are highlighted (the focus of that scene)
-- which relationships are highlighted
-- camera_mode: "fit" (show all) or "focus" (zoom into focus_component)
-- narration: 2–3 sentences explaining what's shown
-- panel: optional side information (title + bullet points)
+CRITICAL RULES:
+- visible_components MUST always contain ALL component IDs (every scene, no exceptions)
+  Other nodes appear dimmed in the background — this is how the user sees the full graph
+  while focusing on one node at a time
+- camera_mode is "focus" for deep dives, "fit" for overview and recap
+- Narration: plain spoken English, no markdown, 2–3 sentences per scene
+- Each scene narration must be unique — do NOT repeat sentences or ideas across scenes
+- All component/relationship IDs must exactly match the architecture JSON
+- Return ONLY raw JSON (no markdown fences)
 
-Return ONLY valid JSON (no markdown fences):
+Return format:
 {{
   "scenes": [
     {{
       "id": "scene_1",
       "title": "Scene Title",
       "goal": "What this scene teaches",
-      "visible_components": ["comp_a", "comp_b"],
-      "highlighted_components": ["comp_a"],
-      "highlighted_relationships": ["rel_1"],
+      "visible_components": ["ALL", "component", "ids", "here"],
+      "highlighted_components": ["focused_comp_id"],
+      "highlighted_relationships": ["rel_id_1"],
       "camera_mode": "fit",
       "focus_component": null,
       "narration": "Plain spoken English narration for this scene.",
@@ -56,18 +63,6 @@ Return ONLY valid JSON (no markdown fences):
     }}
   ]
 }}
-
-Rules:
-- 5–7 scenes total
-- First scene is always the global overview (all components visible)
-- Last scene is always a recap (all components visible, all highlighted)
-- Narration: plain spoken English, no markdown, 2–3 sentences per scene
-- IMPORTANT: Each scene narration must be unique — do NOT repeat sentences or ideas across scenes.
-  The overview introduces the system. Deep dives explain specifics. The recap ties it together.
-  Never restate what was already said in a previous scene.
-- Panel bullets: 2–4 short points
-- All component/relationship IDs must match the architecture
-- Return ONLY raw JSON
 """
 
 
@@ -118,9 +113,8 @@ def generate_storyboard(architecture: Architecture) -> Storyboard:
             narration=s.get("narration", ""),
             panel=ScenePanel(**s["panel"]) if s.get("panel") else None,
         )
-        # Ensure visible_components is not empty — show all if unspecified
-        if not scene.visible_components:
-            scene.visible_components = list(valid_comp_ids)
+        # Always show all components — highlighting + dimming handles visual focus
+        scene.visible_components = list(valid_comp_ids)
         scenes.append(scene)
 
     storyboard = Storyboard(scenes=scenes)
@@ -167,7 +161,7 @@ def _fallback_storyboard(arch: Architecture) -> Storyboard:
             id=f"focus_{c.id}",
             title=c.label,
             goal=f"Understand the {c.label} component",
-            visible_components=list({c.id} | connected),
+            visible_components=all_ids,   # all visible, others dimmed
             highlighted_components=[c.id],
             highlighted_relationships=related_rels[:3],
             camera_mode="focus",

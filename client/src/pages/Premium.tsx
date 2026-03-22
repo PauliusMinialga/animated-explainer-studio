@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Check, Crown, Download, Loader2, X } from "lucide-react";
+import { Check, Crown, Download, Loader2, Play, Square, X } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,19 @@ const avatars = [
 
 const moods = ["Friendly", "Technical", "Energetic", "Calm"];
 const levels = ["Beginner", "Advanced", "Expert"];
+
+const RUNWARE_VOICES = [
+  "Abby","Alex","Amina","Anjali","Arjun","Ashley","Blake","Brian",
+  "Callum","Carter","Celeste","Chloe","Claire","Clive","Craig",
+  "Darlene","Deborah","Dennis","Dominus","Edward","Elizabeth","Elliot",
+  "Ethan","Evan","Evelyn","Gareth","Graham","Grant","Hades","Hamish",
+  "Hana","Hank","James","Jason","Jessica","Julia","Julie","Kayla",
+  "Kelsey","Lauren","Liam","Loretta","Luna","Malcolm","Marlene","Mark",
+  "Miranda","Mortimer","Nate","Oliver","Olivia","Pippa","Pixie","Priya",
+  "Ronald","Rupert","Saanvi","Sarah","Sebastian","Serena","Shaun","Simon",
+  "Snik","Theodore","Timothy","Tessa","Tyler","Victor","Victoria","Vinny",
+  "Veronica","Wendy",
+];
 
 const POLL_INTERVAL = 3000;
 const POLL_TIMEOUT = 10 * 60 * 1000; // 10 minutes — avatar gen can be slow
@@ -37,6 +50,11 @@ const Premium = () => {
 
   // Premium controls
   const [selectedAvatar, setSelectedAvatar] = useState("c3po");
+  const [customAvatarUrl, setCustomAvatarUrl] = useState("");
+  const [selectedVoice, setSelectedVoice] = useState("Oliver");
+  const [roboticVoice, setRoboticVoice] = useState(false);
+  const [previewingVoice, setPreviewingVoice] = useState(false);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [mode, setMode] = useState<"concept" | "code">("concept");
   const [mood, setMood] = useState("Friendly");
   const [level, setLevel] = useState("Beginner");
@@ -188,6 +206,31 @@ const Premium = () => {
     return () => { stopPolling(); };
   }, [stopPolling]);
 
+  // Voice preview
+  const handlePreviewVoice = async () => {
+    if (previewingVoice) {
+      previewAudioRef.current?.pause();
+      previewAudioRef.current = null;
+      setPreviewingVoice(false);
+      return;
+    }
+    setPreviewingVoice(true);
+    try {
+      const res = await fetch(`${API_BASE}/preview-voice/${encodeURIComponent(selectedVoice)}?robotic=${roboticVoice}`);
+      if (!res.ok) throw new Error("Preview failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      previewAudioRef.current = audio;
+      audio.onended = () => { setPreviewingVoice(false); URL.revokeObjectURL(url); };
+      audio.onerror = () => { setPreviewingVoice(false); };
+      await audio.play();
+    } catch {
+      setPreviewingVoice(false);
+      toast({ title: "Could not preview voice", variant: "destructive" });
+    }
+  };
+
   // Premium user: real generation
   const handlePremiumGenerate = async () => {
     const isPromptMode = mode === "concept";
@@ -195,6 +238,8 @@ const Premium = () => {
     if (generating) return;
 
     setGenerating(true);
+    // Stop any playing voice preview
+    if (previewAudioRef.current) { previewAudioRef.current.pause(); previewAudioRef.current = null; setPreviewingVoice(false); }
     setVideoUrl(null);
     setRequestId(null);
     setCurrentStatus(null);
@@ -209,7 +254,6 @@ const Premium = () => {
 
       if (IS_DEV) {
         // Local dev: call backend directly, poll via /jobs/:id
-        const isRepo = !isPromptMode && url.trim().startsWith("https://github.com/");
         const res = await fetch(`${API_BASE}/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -219,6 +263,9 @@ const Premium = () => {
             level: level.toLowerCase(),
             mode: "concept",
             avatar: selectedAvatar,
+            voice: selectedVoice,
+            robotic: roboticVoice,
+            avatar_image_url: customAvatarUrl.trim() || null,
           }),
         });
         if (!res.ok) throw new Error(`Backend error: ${res.status}`);
@@ -234,6 +281,9 @@ const Premium = () => {
             topic: isPromptMode ? prompt.trim() : url.trim(),
             mode: isPromptMode ? "prompt" : "repo",
             avatar: selectedAvatar,
+            voice: selectedVoice,
+            robotic: roboticVoice,
+            avatar_image_url: customAvatarUrl.trim() || null,
             mood: mood.toLowerCase(),
             level: level.toLowerCase(),
             github_url: url.trim() || null,
@@ -315,6 +365,57 @@ const Premium = () => {
                 <span className="text-xs font-medium">{a.name}</span>
               </button>
             ))}
+          </div>
+
+          {/* Custom avatar URL */}
+          <div className="mt-4">
+            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              Custom Avatar Image URL <span className="text-xs">(optional — overrides selection above)</span>
+            </label>
+            <input
+              type="url"
+              value={customAvatarUrl}
+              onChange={(e) => setCustomAvatarUrl(e.target.value)}
+              disabled={generating}
+              className="flex h-11 w-full rounded-xl border bg-card px-4 text-sm outline-none transition-colors focus:ring-2 focus:ring-ring disabled:opacity-50"
+              placeholder="https://example.com/my-avatar.jpg"
+            />
+          </div>
+
+          {/* Voice selector */}
+          <div className="mt-4">
+            <label className="mb-1.5 block text-sm font-medium">Voice</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedVoice}
+                onChange={(e) => setSelectedVoice(e.target.value)}
+                disabled={generating}
+                className="rounded-xl border bg-card px-3 py-2 text-sm outline-none transition-colors focus:ring-2 focus:ring-ring disabled:opacity-50"
+              >
+                {RUNWARE_VOICES.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <button
+                onClick={handlePreviewVoice}
+                disabled={generating}
+                title={previewingVoice ? "Stop preview" : "Preview voice"}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border bg-card text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-50"
+              >
+                {previewingVoice ? <Square className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
+              </button>
+              {previewingVoice && <span className="text-xs text-muted-foreground animate-pulse">Playing…</span>}
+              <button
+                onClick={() => setRoboticVoice((v) => !v)}
+                disabled={generating}
+                title="Toggle robotic effect (lower pitch + slower)"
+                className={`ml-2 flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+                  roboticVoice ? "border-accent bg-accent/10 text-accent" : "bg-card text-muted-foreground hover:text-foreground"
+                } disabled:opacity-50`}
+              >
+                🤖 Robotic
+              </button>
+            </div>
           </div>
         </section>
 

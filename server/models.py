@@ -32,8 +32,11 @@ class GenerateRequest(BaseModel):
     mode: Mode = Mode.concept
     level: Level = Level.beginner
     mood: Mood = Mood.friendly
-    avatar: Optional[str] = None  # avatar ID, mapped to image URL by the pipeline
-    request_id: Optional[str] = None  # Supabase video_requests row ID from edge function
+    avatar: Optional[str] = None          # avatar ID (maps to preset image + voice)
+    avatar_image_url: Optional[str] = None  # direct image URL override
+    voice: Optional[str] = None           # TTS voice override
+    robotic: bool = False                 # apply pitch/speed robotic effect
+    request_id: Optional[str] = None      # Supabase video_requests row ID
 
 
 class TTSScriptResponse(BaseModel):

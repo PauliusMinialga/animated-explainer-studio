@@ -227,19 +227,24 @@ function FlowInner({ architecture, storyboard, activeSceneIndex }: RepoExplainer
   }, [sceneNodes, sceneEdges, setNodes, setEdges]);
 
   // Camera: fit view or focus on component
+  // Double-trigger: quick first pass (50ms) + accurate pass after full render (400ms)
   useEffect(() => {
     if (!scene) return;
-    const timeout = setTimeout(() => {
+
+    const applyCamera = () => {
       if (scene.camera_mode === "focus" && scene.focus_component) {
         const pos = positions.get(scene.focus_component);
         if (pos) {
-          setCenter(pos.x + NODE_WIDTH / 2, pos.y + NODE_HEIGHT / 2, { zoom: 1.4, duration: 800 });
+          setCenter(pos.x + NODE_WIDTH / 2, pos.y + NODE_HEIGHT / 2, { zoom: 1.4, duration: 600 });
           return;
         }
       }
-      fitView({ padding: 0.2, duration: 800 });
-    }, 100);
-    return () => clearTimeout(timeout);
+      fitView({ padding: 0.25, duration: 600 });
+    };
+
+    const t1 = setTimeout(applyCamera, 80);
+    const t2 = setTimeout(applyCamera, 420);   // second pass after ReactFlow finishes layout
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [currentScene, scene, fitView, setCenter, positions]);
 
   // Auto-play timer (only when self-managed)

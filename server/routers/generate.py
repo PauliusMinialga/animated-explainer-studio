@@ -25,7 +25,7 @@ from models import GenerateRequest, JobResponse, JobStatus, JobType, TTSScriptRe
 from pipeline.enrich import enrich_prompt, ingest_github_repo
 from pipeline.scripts import generate_scripts
 from pipeline.manim_render import render_manim
-from pipeline.veed_pipeline import run_veed_pipeline, generate_tts_audio
+from pipeline.veed_pipeline import run_veed_pipeline, generate_tts_audio, _tts
 from pipeline.final_merge import merge_final
 from pipeline.repo_analysis import analyze_repo
 from pipeline.repo_storyboard import generate_storyboard
@@ -85,6 +85,25 @@ async def get_job(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return JobResponse(job_id=job_id, **job)
+
+
+@router.get("/preview-voice/{voice}")
+async def preview_voice(voice: str, robotic: bool = False):
+    """Generate a short TTS clip for a voice and return it as audio/mpeg."""
+    import io
+    import tempfile
+    from fastapi.responses import StreamingResponse
+
+    sample_text = f"Hello, I'm {voice}. I'll be your AI presenter today."
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        await _tts(sample_text, tmp_path, voice=voice, robotic=robotic)
+        audio_bytes = tmp_path.read_bytes()
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
 
 
 async def _run_pipeline(job_id: str, req: GenerateRequest, base_url: str = "http://localhost:8000"):
@@ -168,15 +187,15 @@ async def _run_repo_pipeline(
         _set(job_id, progress="Generating scene audio…")
         if rid:
             update_request_status(rid, "adding_voiceover")
-        scene_voice = AVATAR_VOICES.get(req.avatar or "", "Oliver")
-        logger.info("[%s] Generating per-scene TTS (%d scenes) voice=%s", job_id, len(narration.scenes), scene_voice)
+        scene_voice = req.voice or AVATAR_VOICES.get(req.avatar or "", "Oliver")
+        logger.info("[%s] Generating per-scene TTS (%d scenes) voice=%s robotic=%s", job_id, len(narration.scenes), scene_voice, req.robotic)
 
         # Generate all scene audio files in parallel
         scene_tts_tasks = []
         for i, sn in enumerate(narration.scenes):
             if sn.narration.strip():
                 out_path = out_dir / f"scene_{i}.mp3"
-                scene_tts_tasks.append((i, generate_tts_audio(sn.narration, out_path, voice=scene_voice)))
+                scene_tts_tasks.append((i, generate_tts_audio(sn.narration, out_path, voice=scene_voice, robotic=req.robotic)))
 
         for i, task in scene_tts_tasks:
             try:
@@ -208,8 +227,8 @@ async def _run_repo_pipeline(
         _set(job_id, progress="Generating avatar videos…")
         if rid:
             update_request_status(rid, "finalizing")
-        avatar_image_url = AVATAR_IMAGES.get(req.avatar or "", settings.avatar_image_url) or settings.avatar_image_url
-        avatar_voice = AVATAR_VOICES.get(req.avatar or "", "Oliver")
+        avatar_image_url = req.avatar_image_url or AVATAR_IMAGES.get(req.avatar or "", settings.avatar_image_url) or settings.avatar_image_url
+        avatar_voice = req.voice or AVATAR_VOICES.get(req.avatar or "", "Oliver")
         try:
             veed = await run_veed_pipeline(
                 intro_text=narration.intro,
@@ -218,6 +237,7 @@ async def _run_repo_pipeline(
                 job_dir=out_dir,
                 avatar_image_url=avatar_image_url,
                 voice=avatar_voice,
+                robotic=req.robotic,
             )
             # Inject video URLs into narration dict
             narr_dict["intro_video_url"] = f"{base_url}/files/{job_id}/intro.mp4"
@@ -280,8 +300,8 @@ async def _run_code_pipeline(
     if settings.runware_api_key and settings.fal_key:
         if rid:
             update_request_status(rid, "adding_voiceover")
-        avatar_image_url = AVATAR_IMAGES.get(req.avatar or "", settings.avatar_image_url) or settings.avatar_image_url
-        avatar_voice = AVATAR_VOICES.get(req.avatar or "", "Oliver")
+        avatar_image_url = req.avatar_image_url or AVATAR_IMAGES.get(req.avatar or "", settings.avatar_image_url) or settings.avatar_image_url
+        avatar_voice = req.voice or AVATAR_VOICES.get(req.avatar or "", "Oliver")
         veed = await run_veed_pipeline(
             intro_text=tts.intro,
             info_text=tts.info,
@@ -289,6 +309,7 @@ async def _run_code_pipeline(
             job_dir=out_dir,
             avatar_image_url=avatar_image_url,
             voice=avatar_voice,
+            robotic=req.robotic,
         )
 
         _set(job_id, progress="Assembling final video…")
