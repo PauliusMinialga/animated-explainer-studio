@@ -98,13 +98,14 @@ LAYOUT RULES (critical for visual quality — READ CAREFULLY):
 NARRATION RULES:
 - Plain spoken English, no markdown, no special characters
 - INTRO: ~20 words, conversational greeting + topic introduction
-- INFO: ~80–120 words — this is the VOICEOVER played DURING the animation.
-  It MUST follow the exact visual sequence of the animation, step by step.
-  Write it so each sentence describes what is CURRENTLY appearing on screen.
-  The animation has self.wait() calls between steps — your narration sentences
-  should match those pauses. Think of it as a guided commentary:
-  "First, we see... Then, the pointer moves to... Notice how..."
-  Do NOT summarize the whole concept upfront — narrate it as it happens visually.
+- INFO: ~80–120 words — voiceover played DURING the animation.
+  Explain the CONCEPT clearly, as a teacher would to a student.
+  Structure it to match the logical flow of the animation (early steps first, later steps last),
+  but DO NOT narrate the visuals themselves — never say things like
+  "you can see the title", "the box appears", "fading in", "on screen now", etc.
+  Just explain the concept as if you're talking someone through it.
+  Example for recursion: "Recursion is when a function calls itself to solve a smaller version
+  of the same problem. Each call adds a new frame to the call stack, until we hit the base case..."
 - OUTRO: ~20 words, clear takeaway or summary
 
 Return ONLY this exact format:
