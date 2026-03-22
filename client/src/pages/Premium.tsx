@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Check, Crown, Download, Loader2, Play, Square, X } from "lucide-react";
+import { Check, Crown, Download, Play, Square, X } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,16 +33,18 @@ const RUNWARE_VOICES = [
 const POLL_INTERVAL = 3000;
 const POLL_TIMEOUT = 10 * 60 * 1000; // 10 minutes — avatar gen can be slow
 
-const COOKING_MESSAGES = [
-  "Warming up the AI kitchen…",
-  "Chopping your repo into digestible pieces…",
-  "Seasoning with architecture insights…",
-  "Letting the storyboard simmer…",
-  "Whipping up some narration sauce…",
-  "Plating the avatar performance…",
-  "Almost ready — adding final garnish…",
-  "Your explanation is nearly cooked…",
-];
+const COOKING_MESSAGES: Record<string, string> = {
+  pending:            "Gathering your repo data…",
+  generating_script:  "Analysing architecture & writing the script…",
+  rendering:          "Rendering the animation…",
+  adding_voiceover:   "Generating voice & avatar…",
+  finalizing:         "Assembling the final video…",
+  done:               "All done! 🎉",
+  // local backend status aliases
+  in_progress:        "Analysing architecture & writing the script…",
+};
+
+const DEFAULT_COOKING_MSG = "Warming up the AI kitchen…";
 
 const Premium = () => {
   const { user, loading, isPremium, profileLoading } = useAuth();
@@ -65,12 +67,10 @@ const Premium = () => {
   const [generating, setGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
-  // Real polling state
+  // Polling state
   const [requestId, setRequestId] = useState<string | null>(null);
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [cookingIdx, setCookingIdx] = useState(0);
-  const cookingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
 
@@ -81,10 +81,6 @@ const Premium = () => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
-    }
-    if (cookingRef.current) {
-      clearInterval(cookingRef.current);
-      cookingRef.current = null;
     }
   }, []);
 
@@ -97,10 +93,7 @@ const Premium = () => {
         stopPolling();
         setGenerating(false);
         setCurrentStatus(null);
-        toast({
-          title: "Taking longer than expected",
-          description: "Your video is still being processed. Check back later on your profile.",
-        });
+        setErrorMessage("Taking longer than expected. Check back later.");
         return;
       }
 
@@ -118,35 +111,22 @@ const Premium = () => {
         stopPolling();
         setGenerating(false);
 
-        // Repo jobs → redirect to React Flow player
         if (data.job_type === "repo" && data.backend_job_id) {
-          toast({ title: "Analysis ready!", description: "Redirecting to interactive explainer…" });
           navigate(`/repo/${data.backend_job_id}`);
           return;
         }
 
-        // Code jobs → fetch video from generated_videos
         const { data: videoData } = await supabase
           .from("generated_videos")
           .select("video_url")
           .eq("request_id", reqId)
           .maybeSingle();
 
-        if (videoData?.video_url) {
-          setVideoUrl(videoData.video_url);
-          toast({ title: "Video ready!", description: "Your video has been generated." });
-        } else {
-          toast({ title: "Video completed", description: "Video processed but URL not available yet." });
-        }
+        if (videoData?.video_url) setVideoUrl(videoData.video_url);
       } else if (data.status === "failed") {
         stopPolling();
         setGenerating(false);
         setErrorMessage(data.error_message || "An unknown error occurred.");
-        toast({
-          title: "Generation failed",
-          description: data.error_message || "Something went wrong.",
-          variant: "destructive",
-        });
       }
     }, POLL_INTERVAL);
   }, [stopPolling, navigate]);
@@ -159,7 +139,7 @@ const Premium = () => {
       if (Date.now() - pollStartRef.current > POLL_TIMEOUT) {
         stopPolling();
         setGenerating(false);
-        toast({ title: "Taking longer than expected", description: "Check the server logs." });
+        setErrorMessage("Taking longer than expected. Check the server logs.");
         return;
       }
 
@@ -175,25 +155,16 @@ const Premium = () => {
           setGenerating(false);
 
           if (data.job_type === "repo") {
-            toast({ title: "Analysis ready!", description: "Redirecting to interactive explainer…" });
             navigate(`/repo/${jobId}`);
             return;
           }
 
-          if (data.final_url) {
-            setVideoUrl(data.final_url);
-            toast({ title: "Video ready!", description: "Your video has been generated." });
-          } else if (data.animation_url) {
-            setVideoUrl(data.animation_url);
-            toast({ title: "Video ready!", description: "Animation generated (no avatar)." });
-          } else {
-            toast({ title: "Done", description: "Processing complete." });
-          }
+          if (data.final_url) setVideoUrl(data.final_url);
+          else if (data.animation_url) setVideoUrl(data.animation_url);
         } else if (data.status === "failed") {
           stopPolling();
           setGenerating(false);
           setErrorMessage(data.error || "An unknown error occurred.");
-          toast({ title: "Generation failed", description: data.error || "Something went wrong.", variant: "destructive" });
         }
       } catch {
         // Network error — keep polling
@@ -242,12 +213,8 @@ const Premium = () => {
     if (previewAudioRef.current) { previewAudioRef.current.pause(); previewAudioRef.current = null; setPreviewingVoice(false); }
     setVideoUrl(null);
     setRequestId(null);
-    setCurrentStatus(null);
+    setCurrentStatus("pending");
     setErrorMessage(null);
-    setCookingIdx(0);
-    cookingRef.current = setInterval(() => {
-      setCookingIdx((prev) => (prev + 1) % COOKING_MESSAGES.length);
-    }, 5000);
 
     try {
       let jobId: string;
@@ -296,15 +263,9 @@ const Premium = () => {
         setCurrentStatus("pending");
         startPolling(reqId);
       }
-
-      toast({ title: "Request submitted!", description: "Your video is being generated." });
     } catch (err: any) {
       setGenerating(false);
-      toast({
-        title: "Error",
-        description: err.message || "Something went wrong.",
-        variant: "destructive",
-      });
+      setErrorMessage(err.message || "Something went wrong.");
     }
   };
 
@@ -510,20 +471,21 @@ const Premium = () => {
           </div>
         </section>
 
-        {/* Generate Button */}
+        {/* Generate Button — hidden during generation */}
         <section className="mt-10">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handlePremiumGenerate}
-              disabled={generating || (mode === "concept" ? !prompt.trim() : !url.trim())}
-              className="inline-flex h-12 items-center gap-2 rounded-xl bg-accent px-8 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:shadow-none"
-            >
-              {generating && <Loader2 className="h-4 w-4 animate-spin" />}
-              {generating ? "Cooking…" : "Generate Video"}
-            </button>
-          </div>
+          {!generating && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handlePremiumGenerate}
+                disabled={mode === "concept" ? !prompt.trim() : !url.trim()}
+                className="inline-flex h-12 items-center gap-2 rounded-xl bg-accent px-8 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:shadow-none"
+              >
+                Generate Video
+              </button>
+            </div>
+          )}
 
-          {/* Fun cooking loading screen */}
+          {/* Cooking animation — sole feedback during generation */}
           {generating && (
             <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border bg-card p-12 text-center">
               <div className="relative mb-6">
@@ -531,7 +493,7 @@ const Premium = () => {
                 <span className="absolute inset-0 flex items-center justify-center text-2xl">🧑‍🍳</span>
               </div>
               <p className="text-lg font-semibold text-foreground transition-all duration-500">
-                {COOKING_MESSAGES[cookingIdx]}
+                {COOKING_MESSAGES[currentStatus ?? "pending"] ?? DEFAULT_COOKING_MSG}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
                 This usually takes 2–4 minutes. Grab a coffee ☕
