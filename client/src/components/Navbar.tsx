@@ -42,8 +42,8 @@ const Navbar = () => {
           {IS_DEV && (
             <div className="flex items-center rounded-lg border bg-secondary p-0.5 text-xs font-semibold">
               <button
-                onClick={() => navigate("/")}
-                className={`rounded-md px-3 py-1.5 transition-all ${location.pathname === "/" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => navigate("/concepts")}
+                className={`rounded-md px-3 py-1.5 transition-all ${location.pathname === "/concepts" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Freemium
               </button>

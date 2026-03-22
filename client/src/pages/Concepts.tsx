@@ -93,7 +93,8 @@ const Concepts = () => {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  const IS_DEV = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (!user && !IS_DEV) return <Navigate to="/login" replace />;
 
   const activePremadeList = mode === "code" ? premadeCode : premadeConcepts;
 
